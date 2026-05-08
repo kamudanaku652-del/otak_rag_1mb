@@ -1,36 +1,34 @@
-name: Build APK Moely 106KB Final
+name: Build APK Moely 106KB - FIX TITIK
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Ambil kode dari repo
+      - name: Ambil kode
         uses: actions/checkout@v4
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
+          channel: 'stable'
 
-      - name: Setup project Flutter
+      - name: Setup Project Flutter
         run: |
           flutter create.
           flutter pub add tflite_flutter
           mkdir -p assets
 
-          # Ambil moely_asli.tflite + vocab.json dari root
           cp moely_asli.tflite assets/
           cp vocab.json assets/
 
-          # Kalo makanan.json ada, pake. Kalo ga ada, bikin kosong
           if [ -f "makanan.json" ]; then
             cp makanan.json assets/
           else
             echo "{}" > assets/makanan.json
           fi
 
-          # Daftarin semua ke pubspec.yaml
           echo "flutter:" >> pubspec.yaml
           echo " assets:" >> pubspec.yaml
           echo " - assets/moely_asli.tflite" >> pubspec.yaml
@@ -56,7 +54,7 @@ jobs:
             Interpreter? _interpreter;
             Map<String, dynamic> _vocab = {};
             Map<String, dynamic> _makanan = {};
-            String _status = "Loading otak 106KB...";
+            String _status = "Loading...";
             final _controller = TextEditingController();
             List<Map<String,String>> _chat = [];
 
@@ -73,10 +71,10 @@ jobs:
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
                 setState(() {
                   _status = "Moely Ready 🔥";
-                  _chat.add({"bot": "Hai kak! Gue Moely. Otak 106KB udah nyala. Gas ngobrol!"});
+                  _chat.add({"bot": "Hai kak! Gue Moely. Otak 106KB udah nyala!"});
                 });
               } catch (e) {
-                setState(() => _status = "Error: Cek moely_asli.tflite di root");
+                setState(() => _status = "Error: $e");
               }
             }
 
@@ -90,7 +88,7 @@ jobs:
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
                 var output = List.filled(1 * inputIds.length * _vocab['vocab_size'], 0.0)
-              .reshape([1, inputIds.length, _vocab['vocab_size']]);
+             .reshape([1, inputIds.length, _vocab['vocab_size']]);
                 _interpreter!.run(input, output);
                 var logits = output[0][inputIds.length - 1];
                 int nextIdx = logits.indexOf(logits.reduce(max));
@@ -107,9 +105,7 @@ jobs:
               if (tanya.isEmpty || _interpreter == null) return;
               setState(() => _chat.add({"user": tanya}));
               _controller.clear();
-
               String jawaban = "";
-              // 1. Cek makanan.json dulu kalo ada isinya
               if (_makanan.isNotEmpty) {
                 for (var key in _makanan.keys) {
                   if (tanya.toLowerCase().contains(key.toLowerCase())) {
@@ -118,7 +114,6 @@ jobs:
                   }
                 }
               }
-              // 2. Kalo ga ada, pake otak 106KB
               if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
               setState(() => _chat.add({"bot": jawaban}));
             }
@@ -176,5 +171,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Moely-106KB-Final
+          name: Moely-106KB
           path: build/app/outputs/flutter-apk/app-release.apk
