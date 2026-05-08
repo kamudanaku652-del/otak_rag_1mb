@@ -1,0 +1,145 @@
+name: Build APK Otak 1MB RAG
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'
+      
+      - name: Bikin Project
+        run: flutter create rag_app
+      
+      - name: Masukin Kode RAG + Memory
+        working-directory: rag_app
+        run: |
+          flutter pub add file_picker path_provider tflite_flutter
+          cat > lib/main.dart << 'EOF'
+          import 'package:flutter/material.dart';
+          import 'package:file_picker/file_picker.dart';
+          import 'package:path_provider/path_provider.dart';
+          import 'dart:io';
+          import 'dart:convert';
+
+          void main() => runApp(AppRAG());
+
+          class AppRAG extends StatelessWidget {
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(home: RAGPage(), debugShowCheckedModeBanner: false);
+            }
+          }
+
+          class RAGPage extends StatefulWidget {
+            @override
+            State<RAGPage> createState() => _RAGPageState();
+          }
+
+          class _RAGPageState extends State<RAGPage> {
+            List<Map<String, dynamic>> knowledgeBase = [];
+            List<Map<String, String>> memory = [];
+            String status = 'Otak 1MB siap. Kasih makan dulu 🤏';
+            final ctrl = TextEditingController();
+
+            kasihMakan() async {
+              FilePickerResult? result = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: ['json'],
+              );
+              if (result != null) {
+                File file = File(result.files.single.path!);
+                String isi = await file.readAsString();
+                final dir = await getApplicationDocumentsDirectory();
+                await File('${dir.path}/knowledge.json').writeAsString(isi);
+                knowledgeBase = List<Map<String, dynamic>>.from(json.decode(isi));
+                setState(() => status = 'Udah makan ${knowledgeBase.length} data. Otak nyambung!');
+              }
+            }
+
+            List<Map<String, dynamic>> cariDiOtak(String pertanyaan) {
+              if (knowledgeBase.isEmpty) return [];
+              List<Map<String, dynamic>> hasil = [];
+              for (var data in knowledgeBase) {
+                String isiData = data['isi'].toString().toLowerCase();
+                for (var kata in pertanyaan.toLowerCase().split(' ')) {
+                  if (kata.length > 2 && isiData.contains(kata)) {
+                    hasil.add(data);
+                    break;
+                  }
+                }
+              }
+              return hasil.take(3).toList();
+            }
+
+            tanya() async {
+              if (knowledgeBase.isEmpty) {
+                setState(() => status = 'Kasih makan dulu woy 😭 Upload makanan.json');
+                return;
+              }
+              String pertanyaan = ctrl.text;
+              ctrl.clear();
+              var contekan = cariDiOtak(pertanyaan);
+              String riwayat = memory.map((m) => "User: ${m['user']}\nAI: ${m['ai']}").join('\n');
+              
+              String jawaban = contekan.isNotEmpty 
+                ? "Dari yg gue inget: ${contekan.first['isi']}"
+                : "Gatau, coba kasih tau gue dulu di makanan.json 🤏";
+              
+              if (riwayat.contains(pertanyaan)) jawaban += "\nKita udah bahas ini tadi btw";
+
+              memory.add({'user': pertanyaan, 'ai': jawaban});
+              if (memory.length > 5) memory.removeAt(0);
+              setState(() => status = jawaban);
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: Text('Otak 1MB + RAG + Memory')),
+                body: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(children: [
+                    ElevatedButton.icon(
+                      onPressed: kasihMakan,
+                      icon: Icon(Icons.upload_file),
+                      label: Text('Upload Makanan.json 🤏'),
+                    ),
+                    Text('Pengetahuan: ${knowledgeBase.length} | Memory: ${memory.length}/5'),
+                    Divider(),
+                    Expanded(
+                      child: ListView(
+                        reverse: true,
+                        children: memory.reversed.map((m) => ListTile(
+                          title: Text("Lo: ${m['user']}", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("AI: ${m['ai']}"),
+                        )).toList(),
+                      ),
+                    ),
+                    TextField(
+                      controller: ctrl,
+                      decoration: InputDecoration(
+                        hintText: 'Tanya apa aja...',
+                        suffixIcon: IconButton(icon: Icon(Icons.send), onPressed: tanya),
+                      ),
+                      onSubmitted: (_) => tanya(),
+                    ),
+                    SizedBox(height: 8),
+                    Text(status, style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  ]),
+                ),
+              );
+            }
+          }
+          EOF
+      
+      - name: Build APK
+        working-directory: rag_app
+        run: flutter build apk --release
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Otak-1MB-RAG
+          path: rag_app/build/app/outputs/flutter-apk/app-release.apk
