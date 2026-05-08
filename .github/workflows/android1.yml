@@ -1,4 +1,4 @@
-name: Build APK Moely NO EOF
+name: Build APK Moely FIX SDK 36
 on: workflow_dispatch
 
 jobs:
@@ -20,16 +20,18 @@ jobs:
           flutter pub add tflite_flutter
           flutter pub get
 
+          # FIX CRASH SDK 36 - INI KUNCINYA
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
+
           mkdir -p assets lib
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
           [ -f "makanan.json" ] && cp makanan.json assets/ || echo "{}" > assets/makanan.json
 
-          # BENERIN PUBSPEC TANPA EOF
           sed -i '/^flutter:/,$d' pubspec.yaml
           printf '\nflutter:\n uses-material-design: true\n assets:\n - assets/moely_asli.tflite\n - assets/vocab.json\n - assets/makanan.json\n' >> pubspec.yaml
 
-          # BIKIN main.dart TANPA EOF - PAKE PRINTF
           printf '%s\n' \
           "import 'package:flutter/material.dart';" \
           "import 'package:flutter/services.dart';" \
@@ -69,7 +71,6 @@ jobs:
           " } catch (e) {" \
           " setState(() => _status = \"Error: $e\");" \
           " }" \
-          " }" \
           "" \
           " String _generateText(String prompt) {" \
           " if (_interpreter == null) return \"Otak belum nyala kak\";" \
@@ -103,8 +104,6 @@ jobs:
           " if (tanya.toLowerCase().contains(key.toLowerCase())) {" \
           " jawaban = _makanan[key];" \
           " break;" \
-          " }" \
-          " }" \
           " }" \
           " if (jawaban.isEmpty) jawaban = _generateText(\"user: $tanya\nbot:\");" \
           " setState(() => _chat.add({\"bot\": jawaban}));" \
