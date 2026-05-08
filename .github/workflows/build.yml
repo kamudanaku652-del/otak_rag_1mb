@@ -15,7 +15,9 @@ jobs:
       - name: Masukin Kode RAG + Memory
         working-directory: rag_app
         run: |
-          flutter pub add file_picker path_provider tflite_flutter
+          flutter pub add file_picker path_provider
+          # tflite_flutter DIBUANG DULU BIAR GA ERROR
+          
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
@@ -87,7 +89,9 @@ jobs:
                 ? "Dari yg gue inget: ${contekan.first['isi']}"
                 : "Gatau, coba kasih tau gue dulu di makanan.json 🤏";
               
-              if (riwayat.contains(pertanyaan)) jawaban += "\nKita udah bahas ini tadi btw";
+              if (riwayat.toLowerCase().contains(pertanyaan.toLowerCase())) {
+                jawaban += "\nKita udah bahas ini tadi btw";
+              }
 
               memory.add({'user': pertanyaan, 'ai': jawaban});
               if (memory.length > 5) memory.removeAt(0);
