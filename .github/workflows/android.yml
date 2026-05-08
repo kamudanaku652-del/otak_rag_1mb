@@ -16,8 +16,10 @@ jobs:
 
       - name: Setup Project Flutter
         run: |
-          flutter create.
+          flutter create .
           flutter pub add tflite_flutter
+          flutter pub get
+
           mkdir -p assets
 
           cp moely_asli.tflite assets/
@@ -29,11 +31,8 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          echo "flutter:" >> pubspec.yaml
-          echo " assets:" >> pubspec.yaml
-          echo " - assets/moely_asli.tflite" >> pubspec.yaml
-          echo " - assets/vocab.json" >> pubspec.yaml
-          echo " - assets/makanan.json" >> pubspec.yaml
+          # Tambah assets TANPA ngerusak pubspec
+          printf "\nflutter:\n  assets:\n    - assets/moely_asli.tflite\n    - assets/vocab.json\n    - assets/makanan.json\n" >> pubspec.yaml
 
       - name: Tulis kode Moely
         run: |
@@ -66,7 +65,7 @@ jobs:
 
             Future<void> _loadOtak() async {
               try {
-                _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
+                _interpreter = await Interpreter.fromAsset('moely_asli.tflite');
                 _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
                 setState(() {
@@ -80,32 +79,51 @@ jobs:
 
             String _generateText(String prompt) {
               if (_interpreter == null) return "Otak belum nyala kak";
+
               final char2idx = Map<String, int>.from(_vocab['char2idx']);
               final idx2char = List<String>.from(_vocab['idx2char']);
-              List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();
+
+              List<int> inputIds = prompt.split('').map((c) => char2idx[c] ?? 0).toList();
               if (inputIds.isEmpty) inputIds = [0];
+
               String result = "";
+
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
-                var output = List.filled(1 * inputIds.length * _vocab['vocab_size'], 0.0)
-             .reshape([1, inputIds.length, _vocab['vocab_size']]);
+
+                // FIX reshape (manual 3D list)
+                var output = List.generate(
+                  1,
+                  (_) => List.generate(
+                    inputIds.length,
+                    (_) => List.filled(_vocab['vocab_size'], 0.0),
+                  ),
+                );
+
                 _interpreter!.run(input, output);
+
                 var logits = output[0][inputIds.length - 1];
                 int nextIdx = logits.indexOf(logits.reduce(max));
                 String nextChar = idx2char[nextIdx];
+
                 if (nextChar == '\n') break;
+
                 result += nextChar;
                 inputIds.add(nextIdx);
               }
-              return result.isEmpty? "hehe" : result;
+
+              return result.isEmpty ? "hehe" : result;
             }
 
             void _jawab() {
               final tanya = _controller.text.trim();
               if (tanya.isEmpty || _interpreter == null) return;
+
               setState(() => _chat.add({"user": tanya}));
               _controller.clear();
+
               String jawaban = "";
+
               if (_makanan.isNotEmpty) {
                 for (var key in _makanan.keys) {
                   if (tanya.toLowerCase().contains(key.toLowerCase())) {
@@ -114,7 +132,11 @@ jobs:
                   }
                 }
               }
-              if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
+
+              if (jawaban.isEmpty) {
+                jawaban = _generateText("user: $tanya\nbot:");
+              }
+
               setState(() => _chat.add({"bot": jawaban}));
             }
 
@@ -125,37 +147,51 @@ jobs:
                 home: Scaffold(
                   appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),
                   body: Column(children: [
-                    Expanded(child: ListView(
-                      padding: EdgeInsets.all(12),
-                      children: _chat.map((c) {
-                        final isUser = c.containsKey("user");
-                        return Align(
-                          alignment: isUser? Alignment.centerRight : Alignment.centerLeft,
-                          child: Container(
-                            margin: EdgeInsets.symmetric(vertical: 4),
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isUser? Colors.black : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(16),
+                    Expanded(
+                      child: ListView(
+                        padding: EdgeInsets.all(12),
+                        children: _chat.map((c) {
+                          final isUser = c.containsKey("user");
+                          return Align(
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              margin: EdgeInsets.symmetric(vertical: 4),
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isUser ? Colors.black : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                c.values.first,
+                                style: TextStyle(
+                                  color: isUser ? Colors.white : Colors.black,
+                                ),
+                              ),
                             ),
-                            child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),
-                          ),
-                        );
-                      }).toList(),
-                    )),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                     Container(
                       padding: EdgeInsets.all(8),
                       child: Row(children: [
-                        Expanded(child: TextField(
-                          controller: _controller,
-                          decoration: InputDecoration(
-                            hintText: "Ketik ke Moely...",
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            decoration: InputDecoration(
+                              hintText: "Ketik ke Moely...",
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            onSubmitted: (_) => _jawab(),
                           ),
-                          onSubmitted: (_) => _jawab(),
-                        )),
+                        ),
                         SizedBox(width: 8),
-                        FloatingActionButton.small(onPressed: _jawab, child: Icon(Icons.send)),
+                        FloatingActionButton.small(
+                          onPressed: _jawab,
+                          child: Icon(Icons.send),
+                        ),
                       ]),
                     ),
                   ]),
@@ -166,10 +202,10 @@ jobs:
           EOF
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Moely-106KB
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: Moely-APK
+          path: build/app/outputs/flutter-apk/
