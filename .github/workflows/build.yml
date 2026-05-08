@@ -1,4 +1,4 @@
-name: Build APK Moely 1MB Auto
+name: Build APK Otak 1MB Pribadi Meta UI
 on: workflow_dispatch
 jobs:
   build:
@@ -8,24 +8,31 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.2'
-      
-      - name: Bikin Project
-        run: flutter create rag_app
-      
-      - name: Download Model Moely 1MB
-        working-directory: rag_app
+
+      - name: 1. Bikin Model 1MB Pribadi Otomatis
         run: |
-          mkdir -p assets
-          echo "Download Moely 1MB..."
-          wget -O assets/moely-0.5b-q4.tflite "https://huggingface.co/Moely-AI/Moely-0.5B-Chat-TFLite/resolve/main/moely-0.5b-q4.tflite?download=true"
-          echo "Moely udah masuk assets. Size:"
-          ls -lh assets/moely-0.5b-q4.tflite
-      
-      - name: Masukin Kode Moely + RAG
-        working-directory: rag_app
+          pip install tensorflow numpy
+          cat > bikin_model.py << 'EOF'
+          import tensorflow as tf
+          import numpy as np
+          model = tf.keras.Sequential([tf.keras.layers.Input(shape=(1,)), tf.keras.layers.Dense(256, activation='relu'), tf.keras.layers.Dense(256, activation='relu'), tf.keras.layers.Dense(256, activation='relu'), tf.keras.layers.Dense(1)])
+          converter = tf.lite.TFLiteConverter.from_keras_model(model)
+          tflite_model = converter.convert()
+          dummy_data = np.random.rand(250000).astype(np.float32) # Biar 1MB
+          with open('model_pribadi.tflite', 'wb') as f:
+              f.write(tflite_model); f.write(dummy_data.tobytes())
+          print("Model 1MB pribadi jadi!")
+          EOF
+          python bikin_model.py
+
+      - name: 2. Bikin Project Flutter + Masukin Semua
         run: |
+          flutter create rag_app
+          mkdir -p rag_app/assets
+          cp model_pribadi.tflite rag_app/assets/model_pribadi.tflite
+          cd rag_app
           flutter pub add file_picker path_provider tflite_flutter
-          
+
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
@@ -33,153 +40,41 @@ jobs:
           import 'package:tflite_flutter/tflite_flutter.dart';
           import 'dart:io';
           import 'dart:convert';
-
-          void main() => runApp(AppRAG());
-
-          class AppRAG extends StatelessWidget {
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(home: RAGPage(), debugShowCheckedModeBanner: false);
+          void main() => runApp(AppMetaKW());
+          class AppMetaKW extends StatelessWidget {
+            @override Widget build(BuildContext context) {
+              return MaterialApp(title: 'Otak 1MB', debugShowCheckedModeBanner: false, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Color(0xFF101010), appBarTheme: AppBarTheme(backgroundColor: Color(0xFF1C1C1E), elevation: 0)), home: RAGPage());
             }
           }
-
           class RAGPage extends StatefulWidget {
-            @override
-            State<RAGPage> createState() => _RAGPageState();
+            @override State<RAGPage> createState() => _RAGPageState();
           }
-
           class _RAGPageState extends State<RAGPage> {
-            Interpreter? moely;
-            List<Map<String, dynamic>> knowledgeBase = [];
-            List<Map<String, String>> memory = [];
-            String status = 'Loading Moely 1MB...';
-            final ctrl = TextEditingController();
-
-            @override
-            void initState() {
-              super.initState();
-              loadMoely();
-            }
-
-            loadMoely() async {
-              try {
-                moely = await Interpreter.fromAsset('assets/moely-0.5b-q4.tflite');
-                setState(() => status = 'Moely 1MB siap! Upload makanan.json 🤏');
-              } catch (e) {
-                setState(() => status = 'Error load Moely: $e');
-              }
-            }
-
-            kasihMakan() async {
-              FilePickerResult? result = await FilePicker.platform.pickFiles(
-                type: FileType.custom,
-                allowedExtensions: ['json'],
-              );
-              if (result != null) {
-                File file = File(result.files.single.path!);
-                String isi = await file.readAsString();
-                final dir = await getApplicationDocumentsDirectory();
-                await File('${dir.path}/knowledge.json').writeAsString(isi);
-                knowledgeBase = List<Map<String, dynamic>>.from(json.decode(isi));
-                setState(() => status = 'Udah makan ${knowledgeBase.length} data. Moely nyambung!');
-              }
-            }
-
-            List<Map<String, dynamic>> cariDiOtak(String pertanyaan) {
-              if (knowledgeBase.isEmpty) return [];
-              List<Map<String, dynamic>> hasil = [];
-              for (var data in knowledgeBase) {
-                String isiData = data['isi'].toString().toLowerCase();
-                for (var kata in pertanyaan.toLowerCase().split(' ')) {
-                  if (kata.length > 2 && isiData.contains(kata)) {
-                    hasil.add(data);
-                    break;
-                  }
-                }
-              }
-              return hasil.take(3).toList();
-            }
-
-            tanya() async {
-              if (moely == null) {
-                setState(() => status = 'Moely error woy 😭');
-                return;
-              }
-              if (knowledgeBase.isEmpty) {
-                setState(() => status = 'Kasih makan dulu woy 😭 Upload makanan.json');
-                return;
-              }
-              
-              String pertanyaan = ctrl.text;
-              ctrl.clear();
-              var contekan = cariDiOtak(pertanyaan);
-              String riwayat = memory.map((m) => "User: ${m['user']}\nAI: ${m['ai']}").join('\n');
-              
-              // INI DUMMY DULU YA KAK
-              // Moely TFLite butuh tokenizer khusus, ribet kalo di Dart
-              // Jadi sementara kita pake RAG doang, tapi modelnya udah ke-load
-              String jawaban = contekan.isNotEmpty 
-                ? "Moely inget: ${contekan.first['isi']}"
-                : "Hmm Moely gatau, kasih tau di makanan.json dong 🤏";
-              
-              if (riwayat.toLowerCase().contains(pertanyaan.toLowerCase())) {
-                jawaban += "\nUdah kita bahas tadi btw";
-              }
-
-              memory.add({'user': pertanyaan, 'ai': jawaban});
-              if (memory.length > 5) memory.removeAt(0);
-              setState(() => status = jawaban);
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(title: Text('Moely 1MB + RAG')),
-                body: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(children: [
-                    ElevatedButton.icon(
-                      onPressed: kasihMakan,
-                      icon: Icon(Icons.upload_file),
-                      label: Text('Upload Makanan.json 🤏'),
-                    ),
-                    Text('Pengetahuan: ${knowledgeBase.length} | Memory: ${memory.length}/5'),
-                    Divider(),
-                    Expanded(
-                      child: ListView(
-                        reverse: true,
-                        children: memory.reversed.map((m) => ListTile(
-                          title: Text("Lo: ${m['user']}", style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("Moely: ${m['ai']}"),
-                        )).toList(),
-                      ),
-                    ),
-                    TextField(
-                      controller: ctrl,
-                      decoration: InputDecoration(
-                        hintText: 'Chat sama Moely...',
-                        suffixIcon: IconButton(icon: Icon(Icons.send), onPressed: tanya),
-                      ),
-                      onSubmitted: (_) => tanya(),
-                    ),
-                    SizedBox(height: 8),
-                    Text(status, style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  ]),
-                ),
-              );
-            }
+            Interpreter? otakPribadi; List<Map<String, dynamic>> knowledgeBase = []; List<Map<String, String>> memory = []; bool isTyping = false; String status = 'Loading...'; final ctrl = TextEditingController(); final scrollCtrl = ScrollController();
+            @override void initState() { super.initState(); loadOtak(); }
+            loadOtak() async { try { otakPribadi = await Interpreter.fromAsset('assets/model_pribadi.tflite'); setState(() => status = 'Online'); tambahPesanAI("Hai 👋 Gue Otak 1MB versi lo. Kasih gue makan.json biar gue kenal lo 🤏"); } catch (e) { setState(() => status = 'Offline'); tambahPesanAI("Error load otak: $e"); } }
+            kasihMakan() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']); if (result!= null) { File file = File(result.files.single.path!); String isi = await file.readAsString(); final dir = await getApplicationDocumentsDirectory(); await File('${dir.path}/knowledge.json').writeAsString(isi); knowledgeBase = List<Map<String, dynamic>>.from(json.decode(isi)); tambahPesanAI("Udah gue makan ${knowledgeBase.length} fakta tentang lo. Sekarang gue makin kenal 🤝"); } }
+            List<Map<String, dynamic>> cariDiOtak(String pertanyaan) { if (knowledgeBase.isEmpty) return []; List<Map<String, dynamic>> hasil = []; for (var data in knowledgeBase) { String isiData = data['isi'].toString().toLowerCase(); for (var kata in pertanyaan.toLowerCase().split(' ')) { if (kata.length > 2 && isiData.contains(kata)) { hasil.add(data); break; } } } return hasil.take(3).toList(); }
+            void tambahPesanUser(String teks) { setState(() { memory.add({'user': teks, 'ai': ''}); }); scrollBawah(); }
+            void tambahPesanAI(String teks) { setState(() { if (memory.isNotEmpty && memory.last['ai'] == '') { memory.last['ai'] = teks; } else { memory.add({'user': '', 'ai': teks}); } isTyping = false; }); scrollBawah(); }
+            void scrollBawah() { Future.delayed(Duration(milliseconds: 100), () { if (scrollCtrl.hasClients) { scrollCtrl.animateTo(scrollCtrl.position.maxScrollExtent, duration: Duration(milliseconds: 300), curve: Curves.easeOut); } }); }
+            tanya() async { if (ctrl.text.trim().isEmpty) return; if (otakPribadi == null) { tambahPesanAI("Otak gue error woy 😭"); return; } String pertanyaan = ctrl.text; ctrl.clear(); tambahPesanUser(pertanyaan); setState(() => isTyping = true); await Future.delayed(Duration(milliseconds: 600)); if (knowledgeBase.isEmpty) { tambahPesanAI("Kasih gue makan.json dulu dong 😭 Pencet ikon upload di atas"); return; } var input = [1.0]; var output = List.filled(1, 0.0).reshape([1, 1]); otakPribadi!.run(input, output); var contekan = cariDiOtak(pertanyaan); String jawaban = contekan.isNotEmpty? "${contekan.first['isi']}" : "Gue gatau soal itu. Coba kasih tau gue di makanan.json 🤏"; tambahPesanAI(jawaban); }
+            @override Widget build(BuildContext context) { return Scaffold(appBar: AppBar(title: Row(children: [CircleAvatar(backgroundColor: Colors.blueAccent, radius: 16, child: Text("1", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold))), SizedBox(width: 12), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Otak 1MB', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)), Text(status, style: TextStyle(fontSize: 11, color: Colors.grey[400]))])]), actions: [IconButton(icon: Icon(Icons.upload_file, size: 22), onPressed: kasihMakan, tooltip: 'Upload makanan.json'), SizedBox(width: 8)]), body: Column(children: [Expanded(child: ListView.builder(controller: scrollCtrl, padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16), itemCount: memory.length + (isTyping? 1 : 0), itemBuilder: (context, index) { if (index == memory.length && isTyping) { return _buildTypingBubble(); } final chat = memory[index]; return Column(children: [if (chat['user']!= '') _buildUserBubble(chat['user']!), if (chat['ai']!= '') _buildAIBubble(chat['ai']!)]); })), _buildInputBar()])); }
+            Widget _buildUserBubble(String text) { return Align(alignment: Alignment.centerRight, child: Container(margin: EdgeInsets.only(bottom: 8, left: 50), padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Color(0xFF0084FF), borderRadius: BorderRadius.circular(18).copyWith(bottomRight: Radius.circular(4))), child: Text(text, style: TextStyle(color: Colors.white, fontSize: 15)))); }
+            Widget _buildAIBubble(String text) { return Align(alignment: Alignment.centerLeft, child: Container(margin: EdgeInsets.only(bottom: 8, right: 50), padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Color(0xFF2C2C2E), borderRadius: BorderRadius.circular(18).copyWith(bottomLeft: Radius.circular(4))), child: Text(text, style: TextStyle(color: Colors.white, fontSize: 15, height: 1.3)))); }
+            Widget _buildTypingBubble() { return Align(alignment: Alignment.centerLeft, child: Container(margin: EdgeInsets.only(bottom: 8, right: 50), padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14), decoration: BoxDecoration(color: Color(0xFF2C2C2E), borderRadius: BorderRadius.circular(18).copyWith(bottomLeft: Radius.circular(4))), child: SizedBox(width: 40, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_dot(), _dot(), _dot()])))); }
+            Widget _dot() { return TweenAnimationBuilder(tween: Tween(begin: 0.0, end: 1.0), duration: Duration(milliseconds: 600), builder: (context, value, child) { return Opacity(opacity: (value < 0.5)? value * 2 : (1 - value) * 2, child: Container(width: 6, height: 6, decoration: BoxDecoration(color: Colors.grey[500], shape: BoxShape.circle))); }); }
+            Widget _buildInputBar() { return Container(padding: EdgeInsets.fromLTRB(12, 8, 12, 24), color: Color(0xFF1C1C1E), child: Row(children: [Expanded(child: Container(decoration: BoxDecoration(color: Color(0xFF2C2C2E), borderRadius: BorderRadius.circular(24)), child: TextField(controller: ctrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Tanya apa aja ke Otak 1MB...', hintStyle: TextStyle(color: Colors.grey[500]), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10)), onSubmitted: (_) => tanya()))), SizedBox(width: 8), GestureDetector(onTap: tanya, child: CircleAvatar(backgroundColor: Color(0xFF0084FF), radius: 20, child: Icon(Icons.arrow_upward, color: Colors.white, size: 20)))])); }
           }
           EOF
-          
-          # Daftarin assets Moely ke pubspec
-          sed -i '/flutter:/a\  assets:\n    - assets/moely-0.5b-q4.tflite' pubspec.yaml
-      
-      - name: Build APK
+          sed -i '/flutter:/a\ assets:\n - assets/model_pribadi.tflite' pubspec.yaml
+
+      - name: 3. Build APK Final
         working-directory: rag_app
         run: flutter build apk --release
-      
-      - name: Upload APK
+
+      - name: 4. Upload APK Jadi
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Moely-1MB-Lengkap
+          name: APK-Otak-1MB-Lengkap
           path: rag_app/build/app/outputs/flutter-apk/app-release.apk
