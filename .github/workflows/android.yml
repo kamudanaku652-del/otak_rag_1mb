@@ -1,35 +1,43 @@
-name: Build APK Moely Otak Root 106KB - FIX
+name: Build APK Moely 106KB Final
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: subosito/flutter-action@v2
+      - name: Ambil kode dari repo
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
 
-      - name: Siapin Project + Ambil Otak dari Root
+      - name: Setup project Flutter
         run: |
           flutter create.
           flutter pub add tflite_flutter
           mkdir -p assets
-          
-          # AMBIL LANGSUNG DARI ROOT REPO
+
+          # Ambil moely_asli.tflite + vocab.json dari root
           cp moely_asli.tflite assets/
           cp vocab.json assets/
-          cp makanan.json assets/ || echo "{}" > assets/makanan.json
-          
-          # Daftarin ke pubspec
+
+          # Kalo makanan.json ada, pake. Kalo ga ada, bikin kosong
+          if [ -f "makanan.json" ]; then
+            cp makanan.json assets/
+          else
+            echo "{}" > assets/makanan.json
+          fi
+
+          # Daftarin semua ke pubspec.yaml
           echo "flutter:" >> pubspec.yaml
           echo " assets:" >> pubspec.yaml
           echo " - assets/moely_asli.tflite" >> pubspec.yaml
           echo " - assets/vocab.json" >> pubspec.yaml
           echo " - assets/makanan.json" >> pubspec.yaml
 
-      - name: Tulis App Moely
+      - name: Tulis kode Moely
         run: |
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
@@ -48,7 +56,7 @@ jobs:
             Interpreter? _interpreter;
             Map<String, dynamic> _vocab = {};
             Map<String, dynamic> _makanan = {};
-            String _status = "Nyalain otak 106KB...";
+            String _status = "Loading otak 106KB...";
             final _controller = TextEditingController();
             List<Map<String,String>> _chat = [];
 
@@ -64,11 +72,11 @@ jobs:
                 _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
                 setState(() {
-                  _status = "Moely 106KB Nyala 🔥";
-                  _chat.add({"bot": "Hai kak! Ini gue Moely, otak asli bikinan lo yg 106KB udah on. Gas ngobrol!"});
+                  _status = "Moely Ready 🔥";
+                  _chat.add({"bot": "Hai kak! Gue Moely. Otak 106KB udah nyala. Gas ngobrol!"});
                 });
               } catch (e) {
-                setState(() => _status = "Error: Taro moely_asli.tflite di root repo");
+                setState(() => _status = "Error: Cek moely_asli.tflite di root");
               }
             }
 
@@ -82,7 +90,7 @@ jobs:
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
                 var output = List.filled(1 * inputIds.length * _vocab['vocab_size'], 0.0)
-               .reshape([1, inputIds.length, _vocab['vocab_size']]);
+              .reshape([1, inputIds.length, _vocab['vocab_size']]);
                 _interpreter!.run(input, output);
                 var logits = output[0][inputIds.length - 1];
                 int nextIdx = logits.indexOf(logits.reduce(max));
@@ -101,12 +109,16 @@ jobs:
               _controller.clear();
 
               String jawaban = "";
-              for (var key in _makanan.keys) {
-                if (tanya.toLowerCase().contains(key.toLowerCase())) {
-                  jawaban = _makanan[key];
-                  break;
+              // 1. Cek makanan.json dulu kalo ada isinya
+              if (_makanan.isNotEmpty) {
+                for (var key in _makanan.keys) {
+                  if (tanya.toLowerCase().contains(key.toLowerCase())) {
+                    jawaban = _makanan[key];
+                    break;
+                  }
                 }
               }
+              // 2. Kalo ga ada, pake otak 106KB
               if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
               setState(() => _chat.add({"bot": jawaban}));
             }
@@ -158,11 +170,11 @@ jobs:
           }
           EOF
 
-      - name: Build APK Release
+      - name: Build APK
         run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Moely-Root-106KB
+          name: Moely-106KB-Final
           path: build/app/outputs/flutter-apk/app-release.apk
