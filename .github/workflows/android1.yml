@@ -21,7 +21,6 @@ jobs:
           flutter pub get
 
           mkdir -p assets
-          # Pastikan file ada sebelum di-copy
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
 
@@ -31,10 +30,10 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # Bersihkan pubspec agar tidak duplikat
+          # Hapus config bawaan agar tidak duplikat
           sed -i '/^flutter:/,$d' pubspec.yaml
 
-          # Tulis config assets yang benar
+          # Tulis ulang assets (PENTING: EOF harus rata kiri)
           cat >> pubspec.yaml <<EOF
 
 flutter:
@@ -76,7 +75,6 @@ EOF
 
             Future<void> _loadOtak() async {
               try {
-                // DISINI PERBAIKANNYA (Line 48-an): Path harus lengkap
                 _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
                 _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
@@ -177,7 +175,7 @@ EOF
               );
             }
           }
-          EOF
+EOF
 
       - name: Build APK
         run: |
