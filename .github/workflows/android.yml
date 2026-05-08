@@ -1,4 +1,4 @@
-name: Build APK Moely 106KB - FIX CLEAN
+name: Build APK Moely FINAL STABLE
 on: workflow_dispatch
 
 jobs:
@@ -31,8 +31,16 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # Inject assets ke flutter TANPA duplicate
-          sed -i '/flutter:/a\  assets:\n    - assets/moely_asli.tflite\n    - assets/vocab.json\n    - assets/makanan.json' pubspec.yaml
+          # FIX PUBSPEC (AMAN, NO ERROR YAML)
+          cat >> pubspec.yaml <<EOF
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/moely_asli.tflite
+    - assets/vocab.json
+    - assets/makanan.json
+EOF
 
       - name: Tulis kode Moely
         run: |
@@ -201,7 +209,10 @@ jobs:
           EOF
 
       - name: Build APK
-        run: flutter build apk --release --split-per-abi
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
