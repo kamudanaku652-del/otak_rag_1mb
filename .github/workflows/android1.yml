@@ -16,7 +16,7 @@ jobs:
 
       - name: Setup Project Flutter
         run: |
-          flutter create .
+          flutter create.
           flutter pub add tflite_flutter
           flutter pub get
 
@@ -33,8 +33,8 @@ jobs:
           # Hapus config bawaan agar tidak duplikat
           sed -i '/^flutter:/,$d' pubspec.yaml
 
-          # Tulis ulang assets (PENTING: EOF harus rata kiri)
-          cat >> pubspec.yaml <<EOF
+          # Tulis ulang assets - EOF HARUS MENTOK KIRI
+          cat >> pubspec.yaml <<'EOF'
 
 flutter:
   uses-material-design: true
@@ -46,7 +46,7 @@ EOF
 
       - name: Tulis kode Moely
         run: |
-          cat > lib/main.dart << 'EOF'
+          cat > lib/main.dart <<'EOF'
           import 'package:flutter/material.dart';
           import 'package:flutter/services.dart';
           import 'package:tflite_flutter/tflite_flutter.dart';
@@ -89,13 +89,10 @@ EOF
 
             String _generateText(String prompt) {
               if (_interpreter == null) return "Otak belum nyala kak";
-
               final char2idx = Map<String, int>.from(_vocab['char2idx']);
               final idx2char = List<String>.from(_vocab['idx2char']);
-
-              List<int> inputIds = prompt.split('').map((c) => char2idx[c] ?? 0).toList();
+              List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();
               if (inputIds.isEmpty) inputIds = [0];
-
               String result = "";
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
@@ -108,7 +105,7 @@ EOF
                 result += nextChar;
                 inputIds.add(nextIdx);
               }
-              return result.isEmpty ? "..." : result;
+              return result.isEmpty? "..." : result;
             }
 
             void _jawab() {
@@ -142,15 +139,15 @@ EOF
                         children: _chat.map((c) {
                           final isUser = c.containsKey("user");
                           return Align(
-                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            alignment: isUser? Alignment.centerRight : Alignment.centerLeft,
                             child: Container(
                               margin: EdgeInsets.symmetric(vertical: 4),
                               padding: EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isUser ? Colors.black : Colors.grey[200],
+                                color: isUser? Colors.black : Colors.grey[200],
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: Text(c.values.first, style: TextStyle(color: isUser ? Colors.white : Colors.black)),
+                              child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),
                             ),
                           );
                         }).toList(),
@@ -178,8 +175,7 @@ EOF
 EOF
 
       - name: Build APK
-        run: |
-          flutter build apk --release --split-per-abi
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
