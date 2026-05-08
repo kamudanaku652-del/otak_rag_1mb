@@ -1,4 +1,4 @@
-name: Build APK Moely - FINAL FIX
+name: Build APK Moely - FINAL WORKING
 on: workflow_dispatch
 
 jobs:
@@ -14,13 +14,40 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Setup Project & Fix SDK
+      - name: Setup Project & Fix All
         run: |
           flutter create .
-          flutter pub add tflite_flutter
+          
+          # Update pubspec.yaml dengan versi tflite_flutter yang benar
+          cat > pubspec.yaml << 'EOF'
+          name: moely_app
+          description: Moely AI Chatbot
+          publish_to: 'none'
+          version: 1.0.0+1
+
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            tflite_flutter: ^0.11.0  # ← FIX: versi kompatibel Dart 3.5
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+
+          flutter:
+            uses-material-design: true
+            assets:
+              - assets/moely_asli.tflite
+              - assets/vocab.json
+              - assets/makanan.json
+          EOF
+
           flutter pub get
 
-          # FIX KRUSIAL: Turunkan compileSdk ke 34 dan targetSdk ke 33
+          # Setup gradle dengan SDK 34 (stabil)
           cat > android/app/build.gradle << 'EOF'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -32,7 +59,7 @@ jobs:
 
           def flutterRoot = localProperties.getProperty('flutter.sdk')
           if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+              throw new GradleException("Flutter SDK not found.")
           }
 
           apply plugin: 'com.android.application'
@@ -41,7 +68,7 @@ jobs:
 
           android {
               namespace "com.example.moely_app"
-              compileSdk 34  // ← FIX: Turun dari 36 ke 34
+              compileSdk 34
 
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -52,14 +79,10 @@ jobs:
                   jvmTarget = '17'
               }
 
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
-              }
-
               defaultConfig {
                   applicationId "com.example.moely_app"
                   minSdkVersion 21
-                  targetSdkVersion 33  // ← FIX: Turun ke 33
+                  targetSdkVersion 33
                   versionCode 1
                   versionName "1.0"
               }
@@ -74,13 +97,8 @@ jobs:
           flutter {
               source '../..'
           }
-
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
-          }
           EOF
 
-          # Fix build.gradle level project
           cat > android/build.gradle << 'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
@@ -88,7 +106,6 @@ jobs:
                   google()
                   mavenCentral()
               }
-
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -106,55 +123,21 @@ jobs:
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
           }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }
           EOF
 
-          # Update gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
 
           # Setup assets
-          mkdir -p assets lib
-          [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/ || echo "WARNING: moely_asli.tflite not found"
+          mkdir -p assets
+          [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/ || echo "WARNING: moely_asli.tflite missing"
           [ -f "vocab.json" ] && cp vocab.json assets/ || echo '{"char2idx": {},"idx2char": [],"vocab_size": 1}' > assets/vocab.json
           [ -f "makanan.json" ] && cp makanan.json assets/ || echo '{}' > assets/makanan.json
 
-          # Fix pubspec.yaml
-          cat > pubspec.yaml << 'EOF'
-          name: moely_app
-          description: Moely AI Chatbot
-          publish_to: 'none'
-          version: 1.0.0+1
-
-          environment:
-            sdk: '>=3.0.0 <4.0.0'
-
-          dependencies:
-            flutter:
-              sdk: flutter
-            tflite_flutter: ^0.10.4
-
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-
-          flutter:
-            uses-material-design: true
-            assets:
-              - assets/moely_asli.tflite
-              - assets/vocab.json
-              - assets/makanan.json
-          EOF
-
-          flutter pub get
-
-      - name: Tulis kode Moely (Clean Version)
+      - name: Tulis kode main.dart
         run: |
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
@@ -191,7 +174,7 @@ jobs:
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
                 setState(() {
                   _status = 'Moely Ready 🔥';
-                  _chat.add({'bot': 'Hai kak! Gue Moely. Ada yang bisa gue bantu?'});
+                  _chat.add({'bot': 'Halo kak! Ada yang bisa dibantu?'});
                 });
               } catch (e) {
                 setState(() => _status = 'Error: $e');
@@ -199,10 +182,10 @@ jobs:
             }
 
             String _generateText(String prompt) {
-              if (_interpreter == null) return 'Otak mati';
+              if (_interpreter == null) return 'Model belum siap';
               final char2idx = Map<String, int>.from(_vocab['char2idx'] ?? {});
               final idx2char = List<String>.from(_vocab['idx2char'] ?? []);
-              if (char2idx.isEmpty || idx2char.isEmpty) return 'Model error';
+              if (char2idx.isEmpty || idx2char.isEmpty) return 'Maaf, model error';
 
               List<int> inputIds = prompt.split('').map((c) => char2idx[c] ?? 0).toList();
               if (inputIds.isEmpty) inputIds = [0];
@@ -226,9 +209,8 @@ jobs:
                 if (nextChar == '\n') break;
                 result += nextChar;
                 inputIds.add(nextIdx);
-                if (result.length > 300) break;
               }
-              return result.isEmpty ? 'Maaf gak paham kak :(' : result;
+              return result.isEmpty ? 'Maaf, gak paham 😅' : result;
             }
 
             void _jawab() {
@@ -238,6 +220,7 @@ jobs:
               _controller.clear();
               String jawaban = '';
 
+              // Cek makanan.json dulu
               if (_makanan.isNotEmpty) {
                 for (var key in _makanan.keys) {
                   if (tanya.toLowerCase().contains(key.toLowerCase())) {
@@ -248,7 +231,7 @@ jobs:
               }
 
               if (jawaban.isEmpty) {
-                jawaban = _generateText('user: ' + tanya + '\nbot:');
+                jawaban = _generateText('user: $tanya\nbot:');
               }
 
               setState(() => _chat.add({'bot': jawaban}));
@@ -277,7 +260,7 @@ jobs:
                                 margin: EdgeInsets.symmetric(vertical: 4),
                                 padding: EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: isUser ? Colors.black : Colors.grey[200],
+                                  color: isUser ? Colors.black : Colors.grey[300],
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Text(
@@ -300,7 +283,7 @@ jobs:
                                 controller: _controller,
                                 onSubmitted: (_) => _jawab(),
                                 decoration: InputDecoration(
-                                  hintText: 'Tanya apa kak...',
+                                  hintText: 'Ketik pesan...',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(24),
                                   ),
@@ -322,11 +305,13 @@ jobs:
           }
           EOF
 
-      - name: Clean Build Cache
+      - name: Bersihkan cache dan build
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew clean
           cd ..
+          flutter clean
 
       - name: Build APK Release
         run: flutter build apk --release --no-tree-shake-icons
@@ -334,5 +319,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Moely-APK-Fix
+          name: Moely-APK-Final
           path: build/app/outputs/flutter-apk/*.apk
