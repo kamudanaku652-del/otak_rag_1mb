@@ -1,4 +1,4 @@
-name: Build APK Moely SDK FIX
+name: Build APK Moely - FINAL FIX
 on: workflow_dispatch
 
 jobs:
@@ -14,113 +14,325 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Setup Project Flutter
+      - name: Setup Project & Fix SDK
         run: |
           flutter create .
           flutter pub add tflite_flutter
           flutter pub get
 
-          # FIX SDK 36 - INI YG BENER BUAT FLUTTER 3.24
-          sed -i 's/compileSdk = 36/compileSdk = 34/g' android/app/build.gradle
-          sed -i 's/targetSdk = 36/targetSdk = 34/g' android/app/build.gradle
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          # FIX KRUSIAL: Turunkan compileSdk ke 34 dan targetSdk ke 33
+          cat > android/app/build.gradle << 'EOF'
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
 
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+          }
+
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          android {
+              namespace "com.example.moely_app"
+              compileSdk 34  // ← FIX: Turun dari 36 ke 34
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+
+              defaultConfig {
+                  applicationId "com.example.moely_app"
+                  minSdkVersion 21
+                  targetSdkVersion 33  // ← FIX: Turun ke 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+
+          flutter {
+              source '../..'
+          }
+
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
+          }
+          EOF
+
+          # Fix build.gradle level project
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.0'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # Update gradle.properties
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
+
+          # Setup assets
           mkdir -p assets lib
-          [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
-          [ -f "vocab.json" ] && cp vocab.json assets/
-          [ -f "makanan.json" ] && cp makanan.json assets/ || echo "{}" > assets/makanan.json
+          [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/ || echo "WARNING: moely_asli.tflite not found"
+          [ -f "vocab.json" ] && cp vocab.json assets/ || echo '{"char2idx": {},"idx2char": [],"vocab_size": 1}' > assets/vocab.json
+          [ -f "makanan.json" ] && cp makanan.json assets/ || echo '{}' > assets/makanan.json
 
-          sed -i '/^flutter:/,$d' pubspec.yaml
-          printf 'flutter:\n uses-material-design: true\n assets:\n - assets/moely_asli.tflite\n - assets/vocab.json\n - assets/makanan.json\n' >> pubspec.yaml
+          # Fix pubspec.yaml
+          cat > pubspec.yaml << 'EOF'
+          name: moely_app
+          description: Moely AI Chatbot
+          publish_to: 'none'
+          version: 1.0.0+1
 
-      - name: Tulis kode Moely
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            tflite_flutter: ^0.10.4
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+
+          flutter:
+            uses-material-design: true
+            assets:
+              - assets/moely_asli.tflite
+              - assets/vocab.json
+              - assets/makanan.json
+          EOF
+
+          flutter pub get
+
+      - name: Tulis kode Moely (Clean Version)
         run: |
-          printf "import 'package:flutter/material.dart';\n" > lib/main.dart
-          printf "import 'package:flutter/services.dart';\n" >> lib/main.dart
-          printf "import 'package:tflite_flutter/tflite_flutter.dart';\n" >> lib/main.dart
-          printf "import 'dart:convert';\n" >> lib/main.dart
-          printf "import 'dart:math';\n\n" >> lib/main.dart
-          printf "void main() => runApp(MoelyApp());\n\n" >> lib/main.dart
-          printf "class MoelyApp extends StatefulWidget {\n" >> lib/main.dart
-          printf " @override State<MoelyApp> createState() => _MoelyState();\n" >> lib/main.dart
-          printf "}\n\n" >> lib/main.dart
-          printf "class _MoelyState extends State<MoelyApp> {\n" >> lib/main.dart
-          printf " Interpreter? _interpreter;\n" >> lib/main.dart
-          printf " Map<String, dynamic> _vocab = {};\n" >> lib/main.dart
-          printf " Map<String, dynamic> _makanan = {};\n" >> lib/main.dart
-          printf " String _status = 'Loading...';\n" >> lib/main.dart
-          printf " final _controller = TextEditingController();\n" >> lib/main.dart
-          printf " List<Map<String,String>> _chat = [];\n\n" >> lib/main.dart
-          printf " @override void initState() { super.initState(); _loadOtak(); }\n\n" >> lib/main.dart
-          printf " Future<void> _loadOtak() async {\n" >> lib/main.dart
-          printf " try {\n" >> lib/main.dart
-          printf " _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');\n" >> lib/main.dart
-          printf " _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));\n" >> lib/main.dart
-          printf " _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));\n" >> lib/main.dart
-          printf " setState(() { _status = 'Moely Ready 🔥'; _chat.add({'bot': 'Hai kak! Gue Moely.'}); });\n" >> lib/main.dart
-          printf " } catch (e) { setState(() => _status = 'Error: \$e'); }\n" >> lib/main.dart
-          printf " }\n\n" >> lib/main.dart
-          printf " String _generateText(String prompt) {\n" >> lib/main.dart
-          printf " if (_interpreter == null) return 'Otak mati';\n" >> lib/main.dart
-          printf " final char2idx = Map<String, int>.from(_vocab['char2idx']);\n" >> lib/main.dart
-          printf " final idx2char = List<String>.from(_vocab['idx2char']);\n" >> lib/main.dart
-          printf " List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();\n" >> lib/main.dart
-          printf " if (inputIds.isEmpty) inputIds = [0];\n" >> lib/main.dart
-          printf " String result = '';\n" >> lib/main.dart
-          printf " for (int i = 0; i < 60; i++) {\n" >> lib/main.dart
-          printf " var input = [inputIds];\n" >> lib/main.dart
-          printf " var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));\n" >> lib/main.dart
-          printf " _interpreter!.run(input, output);\n" >> lib/main.dart
-          printf " var logits = output[0][inputIds.length - 1];\n" >> lib/main.dart
-          printf " int nextIdx = logits.indexOf(logits.reduce(max));\n" >> lib/main.dart
-          printf " String nextChar = idx2char[nextIdx];\n" >> lib/main.dart
-          printf " if (nextChar == '\\\n') break;\n" >> lib/main.dart
-          printf " result += nextChar; inputIds.add(nextIdx);\n" >> lib/main.dart
-          printf " }\n" >> lib/main.dart
-          printf " return result.isEmpty? '...' : result;\n" >> lib/main.dart
-          printf " }\n\n" >> lib/main.dart
-          printf " void _jawab() {\n" >> lib/main.dart
-          printf " final tanya = _controller.text.trim();\n" >> lib/main.dart
-          printf " if (tanya.isEmpty || _interpreter == null) return;\n" >> lib/main.dart
-          printf " setState(() => _chat.add({'user': tanya}));\n" >> lib/main.dart
-          printf " _controller.clear();\n" >> lib/main.dart
-          printf " String jawaban = '';\n" >> lib/main.dart
-          printf " if (_makanan.isNotEmpty) {\n" >> lib/main.dart
-          printf " for (var key in _makanan.keys) {\n" >> lib/main.dart
-          printf " if (tanya.toLowerCase().contains(key.toLowerCase())) {\n" >> lib/main.dart
-          printf " jawaban = _makanan[key]; break;\n" >> lib/main.dart
-          printf " }\n" >> lib/main.dart
-          printf " }\n" >> lib/main.dart
-          printf " }\n" >> lib/main.dart
-          printf " if (jawaban.isEmpty) jawaban = _generateText('user: ' + tanya + '\\\nbot:');\n" >> lib/main.dart
-          printf " setState(() => _chat.add({'bot': jawaban}));\n" >> lib/main.dart
-          printf " }\n\n" >> lib/main.dart
-          printf " @override Widget build(BuildContext context) {\n" >> lib/main.dart
-          printf " return MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(\n" >> lib/main.dart
-          printf " appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),\n" >> lib/main.dart
-          printf " body: Column(children: [\n" >> lib/main.dart
-          printf " Expanded(child: ListView(padding: EdgeInsets.all(12), children: _chat.map((c) {\n" >> lib/main.dart
-          printf " final isUser = c.containsKey('user');\n" >> lib/main.dart
-          printf " return Align(alignment: isUser? Alignment.centerRight : Alignment.centerLeft,\n" >> lib/main.dart
-          printf " child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.all(12),\n" >> lib/main.dart
-          printf " decoration: BoxDecoration(color: isUser? Colors.black : Colors.grey[200], borderRadius: BorderRadius.circular(16)),\n" >> lib/main.dart
-          printf " child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),\n" >> lib/main.dart
-          printf " ));\n" >> lib/main.dart
-          printf " }).toList())),\n" >> lib/main.dart
-          printf " Container(padding: EdgeInsets.all(8), child: Row(children: [\n" >> lib/main.dart
-          printf " Expanded(child: TextField(controller: _controller, onSubmitted: (_) => _jawab())),\n" >> lib/main.dart
-          printf " IconButton(icon: Icon(Icons.send), onPressed: _jawab)\n" >> lib/main.dart
-          printf " ]))\n" >> lib/main.dart
-          printf " ])\n" >> lib/main.dart
-          printf " ));\n" >> lib/main.dart
-          printf " }\n" >> lib/main.dart
-          printf "}\n" >> lib/main.dart
+          cat > lib/main.dart << 'EOF'
+          import 'package:flutter/material.dart';
+          import 'package:flutter/services.dart';
+          import 'package:tflite_flutter/tflite_flutter.dart';
+          import 'dart:convert';
+          import 'dart:math';
 
-      - name: Build APK
-        run: flutter build apk --release
+          void main() => runApp(MoelyApp());
+
+          class MoelyApp extends StatefulWidget {
+            @override
+            State<MoelyApp> createState() => _MoelyState();
+          }
+
+          class _MoelyState extends State<MoelyApp> {
+            Interpreter? _interpreter;
+            Map<String, dynamic> _vocab = {};
+            Map<String, dynamic> _makanan = {};
+            String _status = 'Loading...';
+            final _controller = TextEditingController();
+            List<Map<String, String>> _chat = [];
+
+            @override
+            void initState() {
+              super.initState();
+              _loadOtak();
+            }
+
+            Future<void> _loadOtak() async {
+              try {
+                _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
+                _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
+                _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
+                setState(() {
+                  _status = 'Moely Ready 🔥';
+                  _chat.add({'bot': 'Hai kak! Gue Moely. Ada yang bisa gue bantu?'});
+                });
+              } catch (e) {
+                setState(() => _status = 'Error: $e');
+              }
+            }
+
+            String _generateText(String prompt) {
+              if (_interpreter == null) return 'Otak mati';
+              final char2idx = Map<String, int>.from(_vocab['char2idx'] ?? {});
+              final idx2char = List<String>.from(_vocab['idx2char'] ?? []);
+              if (char2idx.isEmpty || idx2char.isEmpty) return 'Model error';
+
+              List<int> inputIds = prompt.split('').map((c) => char2idx[c] ?? 0).toList();
+              if (inputIds.isEmpty) inputIds = [0];
+              String result = '';
+
+              for (int i = 0; i < 50; i++) {
+                var input = [inputIds];
+                var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'] ?? 100, 0.0)));
+                _interpreter!.run(input, output);
+                var logits = output[0][inputIds.length - 1];
+                int nextIdx = 0;
+                double maxVal = -1e9;
+                for (int j = 0; j < logits.length; j++) {
+                  if (logits[j] > maxVal) {
+                    maxVal = logits[j];
+                    nextIdx = j;
+                  }
+                }
+                if (nextIdx >= idx2char.length) break;
+                String nextChar = idx2char[nextIdx];
+                if (nextChar == '\n') break;
+                result += nextChar;
+                inputIds.add(nextIdx);
+                if (result.length > 300) break;
+              }
+              return result.isEmpty ? 'Maaf gak paham kak :(' : result;
+            }
+
+            void _jawab() {
+              final tanya = _controller.text.trim();
+              if (tanya.isEmpty || _interpreter == null) return;
+              setState(() => _chat.add({'user': tanya}));
+              _controller.clear();
+              String jawaban = '';
+
+              if (_makanan.isNotEmpty) {
+                for (var key in _makanan.keys) {
+                  if (tanya.toLowerCase().contains(key.toLowerCase())) {
+                    jawaban = _makanan[key];
+                    break;
+                  }
+                }
+              }
+
+              if (jawaban.isEmpty) {
+                jawaban = _generateText('user: ' + tanya + '\nbot:');
+              }
+
+              setState(() => _chat.add({'bot': jawaban}));
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: Scaffold(
+                  appBar: AppBar(
+                    title: Text(_status),
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                  ),
+                  body: Column(
+                    children: [
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.all(12),
+                          children: _chat.map((c) {
+                            final isUser = c.containsKey('user');
+                            return Align(
+                              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                margin: EdgeInsets.symmetric(vertical: 4),
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isUser ? Colors.black : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  c.values.first,
+                                  style: TextStyle(
+                                    color: isUser ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _controller,
+                                onSubmitted: (_) => _jawab(),
+                                decoration: InputDecoration(
+                                  hintText: 'Tanya apa kak...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.send),
+                              onPressed: _jawab,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: Clean Build Cache
+        run: |
+          cd android
+          ./gradlew clean
+          cd ..
+
+      - name: Build APK Release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Moely-APK
+          name: Moely-APK-Fix
           path: build/app/outputs/flutter-apk/*.apk
