@@ -1,4 +1,4 @@
-name: Build APK Moely FINAL FIX NO ERROR
+name: Build APK Moely FINAL BANGET
 on: workflow_dispatch
 
 jobs:
@@ -23,26 +23,11 @@ jobs:
           mkdir -p assets
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
+          [ -f "makanan.json" ] && cp makanan.json assets/ || echo "{}" > assets/makanan.json
 
-          if [ -f "makanan.json" ]; then
-            cp makanan.json assets/
-          else
-            echo "{}" > assets/makanan.json
-          fi
-
-          # Hapus config bawaan agar tidak duplikat
+          # HAPUS CONFIG LAMA + TULIS ULANG PAKE PRINTF - ANTI ERROR YAML
           sed -i '/^flutter:/,$d' pubspec.yaml
-
-          # Tulis ulang assets - EOF HARUS MENTOK KIRI
-          cat >> pubspec.yaml <<'EOF'
-
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/moely_asli.tflite
-    - assets/vocab.json
-    - assets/makanan.json
-EOF
+          printf '\nflutter:\n uses-material-design: true\n assets:\n - assets/moely_asli.tflite\n - assets/vocab.json\n - assets/makanan.json\n' >> pubspec.yaml
 
       - name: Tulis kode Moely
         run: |
