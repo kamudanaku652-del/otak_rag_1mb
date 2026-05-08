@@ -1,4 +1,4 @@
-name: Build APK Moely 106KB - FIX TITIK
+name: Build APK Moely 106KB - FIX CLEAN
 on: workflow_dispatch
 
 jobs:
@@ -31,8 +31,8 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # Tambah assets TANPA ngerusak pubspec
-          printf "\nflutter:\n  assets:\n    - assets/moely_asli.tflite\n    - assets/vocab.json\n    - assets/makanan.json\n" >> pubspec.yaml
+          # Inject assets ke flutter TANPA duplicate
+          sed -i '/flutter:/a\  assets:\n    - assets/moely_asli.tflite\n    - assets/vocab.json\n    - assets/makanan.json' pubspec.yaml
 
       - name: Tulis kode Moely
         run: |
@@ -91,7 +91,6 @@ jobs:
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
 
-                // FIX reshape (manual 3D list)
                 var output = List.generate(
                   1,
                   (_) => List.generate(
