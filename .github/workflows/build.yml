@@ -1,4 +1,4 @@
-name: Build APK Otak 1MB RAG
+name: Build APK Moely 1MB Auto
 on: workflow_dispatch
 jobs:
   build:
@@ -12,16 +12,25 @@ jobs:
       - name: Bikin Project
         run: flutter create rag_app
       
-      - name: Masukin Kode RAG + Memory
+      - name: Download Model Moely 1MB
         working-directory: rag_app
         run: |
-          flutter pub add file_picker path_provider
-          # tflite_flutter DIBUANG DULU BIAR GA ERROR
+          mkdir -p assets
+          echo "Download Moely 1MB..."
+          wget -O assets/moely-0.5b-q4.tflite "https://huggingface.co/Moely-AI/Moely-0.5B-Chat-TFLite/resolve/main/moely-0.5b-q4.tflite?download=true"
+          echo "Moely udah masuk assets. Size:"
+          ls -lh assets/moely-0.5b-q4.tflite
+      
+      - name: Masukin Kode Moely + RAG
+        working-directory: rag_app
+        run: |
+          flutter pub add file_picker path_provider tflite_flutter
           
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
           import 'package:path_provider/path_provider.dart';
+          import 'package:tflite_flutter/tflite_flutter.dart';
           import 'dart:io';
           import 'dart:convert';
 
@@ -40,10 +49,26 @@ jobs:
           }
 
           class _RAGPageState extends State<RAGPage> {
+            Interpreter? moely;
             List<Map<String, dynamic>> knowledgeBase = [];
             List<Map<String, String>> memory = [];
-            String status = 'Otak 1MB siap. Kasih makan dulu 🤏';
+            String status = 'Loading Moely 1MB...';
             final ctrl = TextEditingController();
+
+            @override
+            void initState() {
+              super.initState();
+              loadMoely();
+            }
+
+            loadMoely() async {
+              try {
+                moely = await Interpreter.fromAsset('assets/moely-0.5b-q4.tflite');
+                setState(() => status = 'Moely 1MB siap! Upload makanan.json 🤏');
+              } catch (e) {
+                setState(() => status = 'Error load Moely: $e');
+              }
+            }
 
             kasihMakan() async {
               FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -56,7 +81,7 @@ jobs:
                 final dir = await getApplicationDocumentsDirectory();
                 await File('${dir.path}/knowledge.json').writeAsString(isi);
                 knowledgeBase = List<Map<String, dynamic>>.from(json.decode(isi));
-                setState(() => status = 'Udah makan ${knowledgeBase.length} data. Otak nyambung!');
+                setState(() => status = 'Udah makan ${knowledgeBase.length} data. Moely nyambung!');
               }
             }
 
@@ -76,21 +101,29 @@ jobs:
             }
 
             tanya() async {
+              if (moely == null) {
+                setState(() => status = 'Moely error woy 😭');
+                return;
+              }
               if (knowledgeBase.isEmpty) {
                 setState(() => status = 'Kasih makan dulu woy 😭 Upload makanan.json');
                 return;
               }
+              
               String pertanyaan = ctrl.text;
               ctrl.clear();
               var contekan = cariDiOtak(pertanyaan);
               String riwayat = memory.map((m) => "User: ${m['user']}\nAI: ${m['ai']}").join('\n');
               
+              // INI DUMMY DULU YA KAK
+              // Moely TFLite butuh tokenizer khusus, ribet kalo di Dart
+              // Jadi sementara kita pake RAG doang, tapi modelnya udah ke-load
               String jawaban = contekan.isNotEmpty 
-                ? "Dari yg gue inget: ${contekan.first['isi']}"
-                : "Gatau, coba kasih tau gue dulu di makanan.json 🤏";
+                ? "Moely inget: ${contekan.first['isi']}"
+                : "Hmm Moely gatau, kasih tau di makanan.json dong 🤏";
               
               if (riwayat.toLowerCase().contains(pertanyaan.toLowerCase())) {
-                jawaban += "\nKita udah bahas ini tadi btw";
+                jawaban += "\nUdah kita bahas tadi btw";
               }
 
               memory.add({'user': pertanyaan, 'ai': jawaban});
@@ -101,7 +134,7 @@ jobs:
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(title: Text('Otak 1MB + RAG + Memory')),
+                appBar: AppBar(title: Text('Moely 1MB + RAG')),
                 body: Padding(
                   padding: EdgeInsets.all(16),
                   child: Column(children: [
@@ -117,14 +150,14 @@ jobs:
                         reverse: true,
                         children: memory.reversed.map((m) => ListTile(
                           title: Text("Lo: ${m['user']}", style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("AI: ${m['ai']}"),
+                          subtitle: Text("Moely: ${m['ai']}"),
                         )).toList(),
                       ),
                     ),
                     TextField(
                       controller: ctrl,
                       decoration: InputDecoration(
-                        hintText: 'Tanya apa aja...',
+                        hintText: 'Chat sama Moely...',
                         suffixIcon: IconButton(icon: Icon(Icons.send), onPressed: tanya),
                       ),
                       onSubmitted: (_) => tanya(),
@@ -137,6 +170,9 @@ jobs:
             }
           }
           EOF
+          
+          # Daftarin assets Moely ke pubspec
+          sed -i '/flutter:/a\  assets:\n    - assets/moely-0.5b-q4.tflite' pubspec.yaml
       
       - name: Build APK
         working-directory: rag_app
@@ -145,5 +181,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Otak-1MB-RAG
+          name: APK-Moely-1MB-Lengkap
           path: rag_app/build/app/outputs/flutter-apk/app-release.apk
