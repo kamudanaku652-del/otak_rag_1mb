@@ -1,4 +1,4 @@
-name: Build APK Moely FINAL BANGET DAH
+name: Build APK Moely SDK FIX
 on: workflow_dispatch
 
 jobs:
@@ -16,27 +16,25 @@ jobs:
 
       - name: Setup Project Flutter
         run: |
-          flutter create .
+          flutter create.
           flutter pub add tflite_flutter
           flutter pub get
 
-          # Fix SDK Version agar kompatibel
+          # FIX SDK 36 - INI YG BENER BUAT FLUTTER 3.24
           sed -i 's/compileSdk = 36/compileSdk = 34/g' android/app/build.gradle
-sed -i 's/targetSdk = 36/targetSdk = 34/g' android/app/build.gradle
-sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          sed -i 's/targetSdk = 36/targetSdk = 34/g' android/app/build.gradle
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+
           mkdir -p assets lib
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
           [ -f "makanan.json" ] && cp makanan.json assets/ || echo "{}" > assets/makanan.json
 
-          # Reset pubspec.yaml biar gak duplikat key 'flutter:'
           sed -i '/^flutter:/,$d' pubspec.yaml
-          
-          printf 'flutter:\n  uses-material-design: true\n  assets:\n    - assets/moely_asli.tflite\n    - assets/vocab.json\n    - assets/makanan.json\n' >> pubspec.yaml
+          printf 'flutter:\n uses-material-design: true\n assets:\n - assets/moely_asli.tflite\n - assets/vocab.json\n - assets/makanan.json\n' >> pubspec.yaml
 
       - name: Tulis kode Moely
         run: |
-          # Gunakan printf satu baris satu baris agar tidak perlu pusing soal EOF atau indentasi
           printf "import 'package:flutter/material.dart';\n" > lib/main.dart
           printf "import 'package:flutter/services.dart';\n" >> lib/main.dart
           printf "import 'package:tflite_flutter/tflite_flutter.dart';\n" >> lib/main.dart
@@ -44,78 +42,78 @@ sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/bu
           printf "import 'dart:math';\n\n" >> lib/main.dart
           printf "void main() => runApp(MoelyApp());\n\n" >> lib/main.dart
           printf "class MoelyApp extends StatefulWidget {\n" >> lib/main.dart
-          printf "  @override State<MoelyApp> createState() => _MoelyState();\n" >> lib/main.dart
+          printf " @override State<MoelyApp> createState() => _MoelyState();\n" >> lib/main.dart
           printf "}\n\n" >> lib/main.dart
           printf "class _MoelyState extends State<MoelyApp> {\n" >> lib/main.dart
-          printf "  Interpreter? _interpreter;\n" >> lib/main.dart
-          printf "  Map<String, dynamic> _vocab = {};\n" >> lib/main.dart
-          printf "  Map<String, dynamic> _makanan = {};\n" >> lib/main.dart
-          printf "  String _status = 'Loading...';\n" >> lib/main.dart
-          printf "  final _controller = TextEditingController();\n" >> lib/main.dart
-          printf "  List<Map<String,String>> _chat = [];\n\n" >> lib/main.dart
-          printf "  @override void initState() { super.initState(); _loadOtak(); }\n\n" >> lib/main.dart
-          printf "  Future<void> _loadOtak() async {\n" >> lib/main.dart
-          printf "    try {\n" >> lib/main.dart
-          printf "      _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');\n" >> lib/main.dart
-          printf "      _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));\n" >> lib/main.dart
-          printf "      _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));\n" >> lib/main.dart
-          printf "      setState(() { _status = 'Moely Ready 🔥'; _chat.add({'bot': 'Hai kak! Gue Moely.'}); });\n" >> lib/main.dart
-          printf "    } catch (e) { setState(() => _status = 'Error: \$e'); }\n" >> lib/main.dart
-          printf "  }\n\n" >> lib/main.dart
-          printf "  String _generateText(String prompt) {\n" >> lib/main.dart
-          printf "    if (_interpreter == null) return 'Otak mati';\n" >> lib/main.dart
-          printf "    final char2idx = Map<String, int>.from(_vocab['char2idx']);\n" >> lib/main.dart
-          printf "    final idx2char = List<String>.from(_vocab['idx2char']);\n" >> lib/main.dart
-          printf "    List<int> inputIds = prompt.split('').map((c) => char2idx[c] ?? 0).toList();\n" >> lib/main.dart
-          printf "    if (inputIds.isEmpty) inputIds = [0];\n" >> lib/main.dart
-          printf "    String result = '';\n" >> lib/main.dart
-          printf "    for (int i = 0; i < 60; i++) {\n" >> lib/main.dart
-          printf "      var input = [inputIds];\n" >> lib/main.dart
-          printf "      var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));\n" >> lib/main.dart
-          printf "      _interpreter!.run(input, output);\n" >> lib/main.dart
-          printf "      var logits = output[0][inputIds.length - 1];\n" >> lib/main.dart
-          printf "      int nextIdx = logits.indexOf(logits.reduce(max));\n" >> lib/main.dart
-          printf "      String nextChar = idx2char[nextIdx];\n" >> lib/main.dart
-          printf "      if (nextChar == '\\\n') break;\n" >> lib/main.dart
-          printf "      result += nextChar; inputIds.add(nextIdx);\n" >> lib/main.dart
-          printf "    }\n" >> lib/main.dart
-          printf "    return result.isEmpty ? '...' : result;\n" >> lib/main.dart
-          printf "  }\n\n" >> lib/main.dart
-          printf "  void _jawab() {\n" >> lib/main.dart
-          printf "    final tanya = _controller.text.trim();\n" >> lib/main.dart
-          printf "    if (tanya.isEmpty || _interpreter == null) return;\n" >> lib/main.dart
-          printf "    setState(() => _chat.add({'user': tanya}));\n" >> lib/main.dart
-          printf "    _controller.clear();\n" >> lib/main.dart
-          printf "    String jawaban = '';\n" >> lib/main.dart
-          printf "    if (_makanan.isNotEmpty) {\n" >> lib/main.dart
-          printf "      for (var key in _makanan.keys) {\n" >> lib/main.dart
-          printf "        if (tanya.toLowerCase().contains(key.toLowerCase())) {\n" >> lib/main.dart
-          printf "          jawaban = _makanan[key]; break;\n" >> lib/main.dart
-          printf "        }\n" >> lib/main.dart
-          printf "      }\n" >> lib/main.dart
-          printf "    }\n" >> lib/main.dart
-          printf "    if (jawaban.isEmpty) jawaban = _generateText('user: ' + tanya + '\\\nbot:');\n" >> lib/main.dart
-          printf "    setState(() => _chat.add({'bot': jawaban}));\n" >> lib/main.dart
-          printf "  }\n\n" >> lib/main.dart
-          printf "  @override Widget build(BuildContext context) {\n" >> lib/main.dart
-          printf "    return MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(\n" >> lib/main.dart
-          printf "      appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),\n" >> lib/main.dart
-          printf "      body: Column(children: [\n" >> lib/main.dart
-          printf "        Expanded(child: ListView(padding: EdgeInsets.all(12), children: _chat.map((c) {\n" >> lib/main.dart
-          printf "          final isUser = c.containsKey('user');\n" >> lib/main.dart
-          printf "          return Align(alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,\n" >> lib/main.dart
-          printf "            child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.all(12),\n" >> lib/main.dart
-          printf "              decoration: BoxDecoration(color: isUser ? Colors.black : Colors.grey[200], borderRadius: BorderRadius.circular(16)),\n" >> lib/main.dart
-          printf "              child: Text(c.values.first, style: TextStyle(color: isUser ? Colors.white : Colors.black)),\n" >> lib/main.dart
-          printf "            ));\n" >> lib/main.dart
-          printf "        }).toList())),\n" >> lib/main.dart
-          printf "        Container(padding: EdgeInsets.all(8), child: Row(children: [\n" >> lib/main.dart
-          printf "          Expanded(child: TextField(controller: _controller, onSubmitted: (_) => _jawab())),\n" >> lib/main.dart
-          printf "          IconButton(icon: Icon(Icons.send), onPressed: _jawab)\n" >> lib/main.dart
-          printf "        ]))\n" >> lib/main.dart
-          printf "      ])\n" >> lib/main.dart
-          printf "    ));\n" >> lib/main.dart
-          printf "  }\n" >> lib/main.dart
+          printf " Interpreter? _interpreter;\n" >> lib/main.dart
+          printf " Map<String, dynamic> _vocab = {};\n" >> lib/main.dart
+          printf " Map<String, dynamic> _makanan = {};\n" >> lib/main.dart
+          printf " String _status = 'Loading...';\n" >> lib/main.dart
+          printf " final _controller = TextEditingController();\n" >> lib/main.dart
+          printf " List<Map<String,String>> _chat = [];\n\n" >> lib/main.dart
+          printf " @override void initState() { super.initState(); _loadOtak(); }\n\n" >> lib/main.dart
+          printf " Future<void> _loadOtak() async {\n" >> lib/main.dart
+          printf " try {\n" >> lib/main.dart
+          printf " _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');\n" >> lib/main.dart
+          printf " _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));\n" >> lib/main.dart
+          printf " _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));\n" >> lib/main.dart
+          printf " setState(() { _status = 'Moely Ready 🔥'; _chat.add({'bot': 'Hai kak! Gue Moely.'}); });\n" >> lib/main.dart
+          printf " } catch (e) { setState(() => _status = 'Error: \$e'); }\n" >> lib/main.dart
+          printf " }\n\n" >> lib/main.dart
+          printf " String _generateText(String prompt) {\n" >> lib/main.dart
+          printf " if (_interpreter == null) return 'Otak mati';\n" >> lib/main.dart
+          printf " final char2idx = Map<String, int>.from(_vocab['char2idx']);\n" >> lib/main.dart
+          printf " final idx2char = List<String>.from(_vocab['idx2char']);\n" >> lib/main.dart
+          printf " List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();\n" >> lib/main.dart
+          printf " if (inputIds.isEmpty) inputIds = [0];\n" >> lib/main.dart
+          printf " String result = '';\n" >> lib/main.dart
+          printf " for (int i = 0; i < 60; i++) {\n" >> lib/main.dart
+          printf " var input = [inputIds];\n" >> lib/main.dart
+          printf " var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));\n" >> lib/main.dart
+          printf " _interpreter!.run(input, output);\n" >> lib/main.dart
+          printf " var logits = output[0][inputIds.length - 1];\n" >> lib/main.dart
+          printf " int nextIdx = logits.indexOf(logits.reduce(max));\n" >> lib/main.dart
+          printf " String nextChar = idx2char[nextIdx];\n" >> lib/main.dart
+          printf " if (nextChar == '\\\n') break;\n" >> lib/main.dart
+          printf " result += nextChar; inputIds.add(nextIdx);\n" >> lib/main.dart
+          printf " }\n" >> lib/main.dart
+          printf " return result.isEmpty? '...' : result;\n" >> lib/main.dart
+          printf " }\n\n" >> lib/main.dart
+          printf " void _jawab() {\n" >> lib/main.dart
+          printf " final tanya = _controller.text.trim();\n" >> lib/main.dart
+          printf " if (tanya.isEmpty || _interpreter == null) return;\n" >> lib/main.dart
+          printf " setState(() => _chat.add({'user': tanya}));\n" >> lib/main.dart
+          printf " _controller.clear();\n" >> lib/main.dart
+          printf " String jawaban = '';\n" >> lib/main.dart
+          printf " if (_makanan.isNotEmpty) {\n" >> lib/main.dart
+          printf " for (var key in _makanan.keys) {\n" >> lib/main.dart
+          printf " if (tanya.toLowerCase().contains(key.toLowerCase())) {\n" >> lib/main.dart
+          printf " jawaban = _makanan[key]; break;\n" >> lib/main.dart
+          printf " }\n" >> lib/main.dart
+          printf " }\n" >> lib/main.dart
+          printf " }\n" >> lib/main.dart
+          printf " if (jawaban.isEmpty) jawaban = _generateText('user: ' + tanya + '\\\nbot:');\n" >> lib/main.dart
+          printf " setState(() => _chat.add({'bot': jawaban}));\n" >> lib/main.dart
+          printf " }\n\n" >> lib/main.dart
+          printf " @override Widget build(BuildContext context) {\n" >> lib/main.dart
+          printf " return MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(\n" >> lib/main.dart
+          printf " appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),\n" >> lib/main.dart
+          printf " body: Column(children: [\n" >> lib/main.dart
+          printf " Expanded(child: ListView(padding: EdgeInsets.all(12), children: _chat.map((c) {\n" >> lib/main.dart
+          printf " final isUser = c.containsKey('user');\n" >> lib/main.dart
+          printf " return Align(alignment: isUser? Alignment.centerRight : Alignment.centerLeft,\n" >> lib/main.dart
+          printf " child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.all(12),\n" >> lib/main.dart
+          printf " decoration: BoxDecoration(color: isUser? Colors.black : Colors.grey[200], borderRadius: BorderRadius.circular(16)),\n" >> lib/main.dart
+          printf " child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),\n" >> lib/main.dart
+          printf " ));\n" >> lib/main.dart
+          printf " }).toList())),\n" >> lib/main.dart
+          printf " Container(padding: EdgeInsets.all(8), child: Row(children: [\n" >> lib/main.dart
+          printf " Expanded(child: TextField(controller: _controller, onSubmitted: (_) => _jawab())),\n" >> lib/main.dart
+          printf " IconButton(icon: Icon(Icons.send), onPressed: _jawab)\n" >> lib/main.dart
+          printf " ]))\n" >> lib/main.dart
+          printf " ])\n" >> lib/main.dart
+          printf " ));\n" >> lib/main.dart
+          printf " }\n" >> lib/main.dart
           printf "}\n" >> lib/main.dart
 
       - name: Build APK
