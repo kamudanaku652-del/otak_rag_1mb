@@ -1,4 +1,4 @@
-name: Build APK Moely FIX SDK 36
+name: Build APK Moely FIX KURUNG
 on: workflow_dispatch
 
 jobs:
@@ -20,7 +20,6 @@ jobs:
           flutter pub add tflite_flutter
           flutter pub get
 
-          # FIX CRASH SDK 36 - INI KUNCINYA
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
           sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
 
@@ -70,6 +69,7 @@ jobs:
           " });" \
           " } catch (e) {" \
           " setState(() => _status = \"Error: $e\");" \
+          " }" \
           " }" \
           "" \
           " String _generateText(String prompt) {" \
