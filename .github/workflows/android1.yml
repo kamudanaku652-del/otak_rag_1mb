@@ -1,4 +1,4 @@
-name: Build APK Moely FINAL BANGET
+name: Build APK Moely NO EOF
 on: workflow_dispatch
 
 jobs:
@@ -20,144 +20,142 @@ jobs:
           flutter pub add tflite_flutter
           flutter pub get
 
-          mkdir -p assets
+          mkdir -p assets lib
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
           [ -f "makanan.json" ] && cp makanan.json assets/ || echo "{}" > assets/makanan.json
 
-          # HAPUS CONFIG LAMA + TULIS ULANG PAKE PRINTF - ANTI ERROR YAML
+          # BENERIN PUBSPEC TANPA EOF
           sed -i '/^flutter:/,$d' pubspec.yaml
           printf '\nflutter:\n uses-material-design: true\n assets:\n - assets/moely_asli.tflite\n - assets/vocab.json\n - assets/makanan.json\n' >> pubspec.yaml
 
-      - name: Tulis kode Moely
-        run: |
-          cat > lib/main.dart <<'EOF'
-          import 'package:flutter/material.dart';
-          import 'package:flutter/services.dart';
-          import 'package:tflite_flutter/tflite_flutter.dart';
-          import 'dart:convert';
-          import 'dart:math';
-
-          void main() => runApp(MoelyApp());
-
-          class MoelyApp extends StatefulWidget {
-            @override State<MoelyApp> createState() => _MoelyState();
-          }
-
-          class _MoelyState extends State<MoelyApp> {
-            Interpreter? _interpreter;
-            Map<String, dynamic> _vocab = {};
-            Map<String, dynamic> _makanan = {};
-            String _status = "Loading...";
-            final _controller = TextEditingController();
-            List<Map<String,String>> _chat = [];
-
-            @override
-            void initState() {
-              super.initState();
-              _loadOtak();
-            }
-
-            Future<void> _loadOtak() async {
-              try {
-                _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
-                _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
-                _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
-                setState(() {
-                  _status = "Moely Ready 🔥";
-                  _chat.add({"bot": "Hai kak! Gue Moely. Otak 106KB udah nyala!"});
-                });
-              } catch (e) {
-                setState(() => _status = "Error: $e");
-              }
-            }
-
-            String _generateText(String prompt) {
-              if (_interpreter == null) return "Otak belum nyala kak";
-              final char2idx = Map<String, int>.from(_vocab['char2idx']);
-              final idx2char = List<String>.from(_vocab['idx2char']);
-              List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();
-              if (inputIds.isEmpty) inputIds = [0];
-              String result = "";
-              for (int i = 0; i < 60; i++) {
-                var input = [inputIds];
-                var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));
-                _interpreter!.run(input, output);
-                var logits = output[0][inputIds.length - 1];
-                int nextIdx = logits.indexOf(logits.reduce(max));
-                String nextChar = idx2char[nextIdx];
-                if (nextChar == '\n') break;
-                result += nextChar;
-                inputIds.add(nextIdx);
-              }
-              return result.isEmpty? "..." : result;
-            }
-
-            void _jawab() {
-              final tanya = _controller.text.trim();
-              if (tanya.isEmpty || _interpreter == null) return;
-              setState(() => _chat.add({"user": tanya}));
-              _controller.clear();
-              String jawaban = "";
-              if (_makanan.isNotEmpty) {
-                for (var key in _makanan.keys) {
-                  if (tanya.toLowerCase().contains(key.toLowerCase())) {
-                    jawaban = _makanan[key];
-                    break;
-                  }
-                }
-              }
-              if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
-              setState(() => _chat.add({"bot": jawaban}));
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                home: Scaffold(
-                  appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),
-                  body: Column(children: [
-                    Expanded(
-                      child: ListView(
-                        padding: EdgeInsets.all(12),
-                        children: _chat.map((c) {
-                          final isUser = c.containsKey("user");
-                          return Align(
-                            alignment: isUser? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              margin: EdgeInsets.symmetric(vertical: 4),
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isUser? Colors.black : Colors.grey[200],
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      child: Row(children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            decoration: InputDecoration(hintText: "Ketik ke Moely...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))),
-                            onSubmitted: (_) => _jawab(),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        FloatingActionButton.small(onPressed: _jawab, child: Icon(Icons.send)),
-                      ]),
-                    ),
-                  ]),
-                ),
-              );
-            }
-          }
-EOF
+          # BIKIN main.dart TANPA EOF - PAKE PRINTF
+          printf '%s\n' \
+          "import 'package:flutter/material.dart';" \
+          "import 'package:flutter/services.dart';" \
+          "import 'package:tflite_flutter/tflite_flutter.dart';" \
+          "import 'dart:convert';" \
+          "import 'dart:math';" \
+          "" \
+          "void main() => runApp(MoelyApp());" \
+          "" \
+          "class MoelyApp extends StatefulWidget {" \
+          " @override State<MoelyApp> createState() => _MoelyState();" \
+          "}" \
+          "" \
+          "class _MoelyState extends State<MoelyApp> {" \
+          " Interpreter? _interpreter;" \
+          " Map<String, dynamic> _vocab = {};" \
+          " Map<String, dynamic> _makanan = {};" \
+          " String _status = \"Loading...\";" \
+          " final _controller = TextEditingController();" \
+          " List<Map<String,String>> _chat = [];" \
+          "" \
+          " @override" \
+          " void initState() {" \
+          " super.initState();" \
+          " _loadOtak();" \
+          " }" \
+          "" \
+          " Future<void> _loadOtak() async {" \
+          " try {" \
+          " _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');" \
+          " _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));" \
+          " _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));" \
+          " setState(() {" \
+          " _status = \"Moely Ready 🔥\";" \
+          " _chat.add({\"bot\": \"Hai kak! Gue Moely. Otak 106KB udah nyala!\"});" \
+          " });" \
+          " } catch (e) {" \
+          " setState(() => _status = \"Error: $e\");" \
+          " }" \
+          " }" \
+          "" \
+          " String _generateText(String prompt) {" \
+          " if (_interpreter == null) return \"Otak belum nyala kak\";" \
+          " final char2idx = Map<String, int>.from(_vocab['char2idx']);" \
+          " final idx2char = List<String>.from(_vocab['idx2char']);" \
+          " List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();" \
+          " if (inputIds.isEmpty) inputIds = [0];" \
+          " String result = \"\";" \
+          " for (int i = 0; i < 60; i++) {" \
+          " var input = [inputIds];" \
+          " var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));" \
+          " _interpreter!.run(input, output);" \
+          " var logits = output[0][inputIds.length - 1];" \
+          " int nextIdx = logits.indexOf(logits.reduce(max));" \
+          " String nextChar = idx2char[nextIdx];" \
+          " if (nextChar == '\n') break;" \
+          " result += nextChar;" \
+          " inputIds.add(nextIdx);" \
+          " }" \
+          " return result.isEmpty? \"...\" : result;" \
+          " }" \
+          "" \
+          " void _jawab() {" \
+          " final tanya = _controller.text.trim();" \
+          " if (tanya.isEmpty || _interpreter == null) return;" \
+          " setState(() => _chat.add({\"user\": tanya}));" \
+          " _controller.clear();" \
+          " String jawaban = \"\";" \
+          " if (_makanan.isNotEmpty) {" \
+          " for (var key in _makanan.keys) {" \
+          " if (tanya.toLowerCase().contains(key.toLowerCase())) {" \
+          " jawaban = _makanan[key];" \
+          " break;" \
+          " }" \
+          " }" \
+          " }" \
+          " if (jawaban.isEmpty) jawaban = _generateText(\"user: $tanya\nbot:\");" \
+          " setState(() => _chat.add({\"bot\": jawaban}));" \
+          " }" \
+          "" \
+          " @override" \
+          " Widget build(BuildContext context) {" \
+          " return MaterialApp(" \
+          " debugShowCheckedModeBanner: false," \
+          " home: Scaffold(" \
+          " appBar: AppBar(title: Text(_status), backgroundColor: Colors.black)," \
+          " body: Column(children: [" \
+          " Expanded(" \
+          " child: ListView(" \
+          " padding: EdgeInsets.all(12)," \
+          " children: _chat.map((c) {" \
+          " final isUser = c.containsKey(\"user\");" \
+          " return Align(" \
+          " alignment: isUser? Alignment.centerRight : Alignment.centerLeft," \
+          " child: Container(" \
+          " margin: EdgeInsets.symmetric(vertical: 4)," \
+          " padding: EdgeInsets.all(12)," \
+          " decoration: BoxDecoration(" \
+          " color: isUser? Colors.black : Colors.grey[200]," \
+          " borderRadius: BorderRadius.circular(16)," \
+          " )," \
+          " child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black))," \
+          " )," \
+          " );" \
+          " }).toList()," \
+          " )," \
+          " )," \
+          " Container(" \
+          " padding: EdgeInsets.all(8)," \
+          " child: Row(children: [" \
+          " Expanded(" \
+          " child: TextField(" \
+          " controller: _controller," \
+          " decoration: InputDecoration(hintText: \"Ketik ke Moely...\", border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)))," \
+          " onSubmitted: (_) => _jawab()," \
+          " )," \
+          " )," \
+          " SizedBox(width: 8)," \
+          " FloatingActionButton.small(onPressed: _jawab, child: Icon(Icons.send))," \
+          " ])," \
+          " )," \
+          " ])," \
+          " )," \
+          " );" \
+          " }" \
+          "}" > lib/main.dart
 
       - name: Build APK
         run: flutter build apk --release
