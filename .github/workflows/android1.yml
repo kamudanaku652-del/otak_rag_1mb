@@ -1,4 +1,4 @@
-name: Build APK Moely FINAL STABLE
+name: Build APK Moely FINAL FIX NO ERROR
 on: workflow_dispatch
 
 jobs:
@@ -31,16 +31,16 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # FIX PUBSPEC (AMAN, NO ERROR YAML)
-          cat >> pubspec.yaml <<EOF
+          # HAPUS kemungkinan assets lama biar gak double
+          sed -i '/assets:/,/^[^ ]/d' pubspec.yaml
 
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/moely_asli.tflite
-    - assets/vocab.json
-    - assets/makanan.json
-EOF
+          # Tambah assets dengan cara aman
+          echo "flutter:" >> pubspec.yaml
+          echo "  uses-material-design: true" >> pubspec.yaml
+          echo "  assets:" >> pubspec.yaml
+          echo "    - assets/moely_asli.tflite" >> pubspec.yaml
+          echo "    - assets/vocab.json" >> pubspec.yaml
+          echo "    - assets/makanan.json" >> pubspec.yaml
 
       - name: Tulis kode Moely
         run: |
