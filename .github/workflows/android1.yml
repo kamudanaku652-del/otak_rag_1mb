@@ -21,8 +21,7 @@ jobs:
           flutter pub get
 
           mkdir -p assets
-
-          # Copy file yang diperlukan
+          # Pastikan file ada sebelum di-copy
           [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
           [ -f "vocab.json" ] && cp vocab.json assets/
 
@@ -32,11 +31,10 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # HAPUS semua isi pubspec.yaml mulai dari kata 'flutter:' sampai paling bawah
-          # Ini kunci biar gak ada "Duplicate mapping key"
+          # Bersihkan pubspec agar tidak duplikat
           sed -i '/^flutter:/,$d' pubspec.yaml
 
-          # Tulis ulang konfigurasi flutter & assets secara bersih
+          # Tulis config assets yang benar
           cat >> pubspec.yaml <<EOF
 
 flutter:
@@ -78,6 +76,7 @@ EOF
 
             Future<void> _loadOtak() async {
               try {
+                // DISINI PERBAIKANNYA (Line 48-an): Path harus lengkap
                 _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
                 _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
@@ -100,42 +99,26 @@ EOF
               if (inputIds.isEmpty) inputIds = [0];
 
               String result = "";
-
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
-
-                var output = List.generate(
-                  1,
-                  (_) => List.generate(
-                    inputIds.length,
-                    (_) => List.filled(_vocab['vocab_size'], 0.0),
-                  ),
-                );
-
+                var output = List.generate(1, (_) => List.generate(inputIds.length, (_) => List.filled(_vocab['vocab_size'], 0.0)));
                 _interpreter!.run(input, output);
-
                 var logits = output[0][inputIds.length - 1];
                 int nextIdx = logits.indexOf(logits.reduce(max));
                 String nextChar = idx2char[nextIdx];
-
                 if (nextChar == '\n') break;
-
                 result += nextChar;
                 inputIds.add(nextIdx);
               }
-
-              return result.isEmpty ? "hehe" : result;
+              return result.isEmpty ? "..." : result;
             }
 
             void _jawab() {
               final tanya = _controller.text.trim();
               if (tanya.isEmpty || _interpreter == null) return;
-
               setState(() => _chat.add({"user": tanya}));
               _controller.clear();
-
               String jawaban = "";
-
               if (_makanan.isNotEmpty) {
                 for (var key in _makanan.keys) {
                   if (tanya.toLowerCase().contains(key.toLowerCase())) {
@@ -144,11 +127,7 @@ EOF
                   }
                 }
               }
-
-              if (jawaban.isEmpty) {
-                jawaban = _generateText("user: $tanya\nbot:");
-              }
-
+              if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
               setState(() => _chat.add({"bot": jawaban}));
             }
 
@@ -173,12 +152,7 @@ EOF
                                 color: isUser ? Colors.black : Colors.grey[200],
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: Text(
-                                c.values.first,
-                                style: TextStyle(
-                                  color: isUser ? Colors.white : Colors.black,
-                                ),
-                              ),
+                              child: Text(c.values.first, style: TextStyle(color: isUser ? Colors.white : Colors.black)),
                             ),
                           );
                         }).toList(),
@@ -190,20 +164,12 @@ EOF
                         Expanded(
                           child: TextField(
                             controller: _controller,
-                            decoration: InputDecoration(
-                              hintText: "Ketik ke Moely...",
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
+                            decoration: InputDecoration(hintText: "Ketik ke Moely...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))),
                             onSubmitted: (_) => _jawab(),
                           ),
                         ),
                         SizedBox(width: 8),
-                        FloatingActionButton.small(
-                          onPressed: _jawab,
-                          child: Icon(Icons.send),
-                        ),
+                        FloatingActionButton.small(onPressed: _jawab, child: Icon(Icons.send)),
                       ]),
                     ),
                   ]),
