@@ -1,0 +1,172 @@
+name: Build APK Moely Otak Root 106KB
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+
+      - name: Siapin Project + Ambil Otak dari Root
+        run: |
+          flutter create.
+          flutter pub add tflite_flutter
+          mkdir -p assets
+          
+          # AMBIL LANGSUNG DARI ROOT REPO
+          cp moely_asli.tflite assets/
+          cp vocab.json assets/
+          
+          # Kalo ada makanan.json di root, pake. Kalo ga ada, bikin kosong
+          cp makanan.json assets/ || echo "{}" > assets/makanan.json
+          
+          # Daftarin ke pubspec
+          echo "flutter:" >> pubspec.yaml
+          echo " assets:" >> pubspec.yaml
+          echo " - assets/moely_asli.tflite" >> pubspec.yaml
+          echo " - assets/vocab.json" >> pubspec.yaml
+          echo " - assets/makanan.json" >> pubspec.yaml
+
+      - name: Tulis App Moely
+        run: |
+          cat > lib/main.dart << 'EOF'
+          import 'package:flutter/material.dart';
+          import 'package:flutter/services.dart';
+          import 'package:tflite_flutter/tflite_flutter.dart';
+          import 'dart:convert';
+          import 'dart:math';
+
+          void main() => runApp(MoelyApp());
+
+          class MoelyApp extends StatefulWidget {
+            @override State<MoelyApp> createState() => _MoelyState();
+          }
+
+          class _MoelyState extends State<MoelyApp> {
+            Interpreter? _interpreter;
+            Map<String, dynamic> _vocab = {};
+            Map<String, dynamic> _makanan = {};
+            String _status = "Nyalain otak 106KB...";
+            final _controller = TextEditingController();
+            List<Map<String,String>> _chat = [];
+
+            @override
+            void initState() {
+              super.initState();
+              _loadOtak();
+            }
+
+            Future<void> _loadOtak() async {
+              try {
+                _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
+                _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
+                _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
+                setState(() {
+                  _status = "Moely 106KB Nyala 🔥";
+                  _chat.add({"bot": "Hai kak! Ini gue Moely, otak asli bikinan lo yg 106KB udah on. Gas ngobrol!"});
+                });
+              } catch (e) {
+                setState(() => _status = "Error: $e");
+              }
+            }
+
+            String _generateText(String prompt) {
+              if (_interpreter == null) return "Otak belum nyala kak";
+              final char2idx = Map<String, int>.from(_vocab['char2idx']);
+              final idx2char = List<String>.from(_vocab['idx2char']);
+              List<int> inputIds = prompt.split('').map((c) => char2idx[c]?? 0).toList();
+              if (inputIds.isEmpty) inputIds = [0];
+              String result = "";
+              for (int i = 0; i < 60; i++) {
+                var input = [inputIds];
+                var output = List.filled(1 * inputIds.length * _vocab['vocab_size'], 0.0)
+                .reshape([1, inputIds.length, _vocab['vocab_size']]);
+                _interpreter!.run(input, output);
+                var logits = output[0][inputIds.length - 1];
+                int nextIdx = logits.indexOf(logits.reduce(max));
+                String nextChar = idx2char[nextIdx];
+                if (nextChar == '\n') break;
+                result += nextChar;
+                inputIds.add(nextIdx);
+              }
+              return result.isEmpty? "hehe" : result;
+            }
+
+            void _jawab() {
+              final tanya = _controller.text.trim();
+              if (tanya.isEmpty || _interpreter == null) return;
+              setState(() => _chat.add({"user": tanya}));
+              _controller.clear();
+
+              String jawaban = "";
+              // 1. Cek makanan.json dulu
+              for (var key in _makanan.keys) {
+                if (tanya.toLowerCase().contains(key.toLowerCase())) {
+                  jawaban = _makanan[key];
+                  break;
+                }
+              }
+              // 2. Kalo ga ada, pake otak asli 106KB lo
+              if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
+              setState(() => _chat.add({"bot": jawaban}));
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: Scaffold(
+                  appBar: AppBar(title: Text(_status), backgroundColor: Colors.black),
+                  body: Column(children: [
+                    Expanded(child: ListView(
+                      padding: EdgeInsets.all(12),
+                      children: _chat.map((c) {
+                        final isUser = c.containsKey("user");
+                        return Align(
+                          alignment: isUser? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: EdgeInsets.symmetric(vertical: 4),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isUser? Colors.black : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(c.values.first, style: TextStyle(color: isUser? Colors.white : Colors.black)),
+                          ),
+                        );
+                      }).toList(),
+                    )),
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      child: Row(children: [
+                        Expanded(child: TextField(
+                          controller: _controller,
+                          decoration: InputDecoration(
+                            hintText: "Ketik ke Moely...",
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          onSubmitted: (_) => _jawab(),
+                        )),
+                        SizedBox(width: 8),
+                        FloatingActionButton.small(onPressed: _jawab, child: Icon(Icons.send)),
+                      ]),
+                    ),
+                  ]),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: Build APK Release
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moely-Root-106KB
+          path: build/app/outputs/flutter-apk/app-release.apk
