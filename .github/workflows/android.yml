@@ -1,4 +1,4 @@
-name: Build APK Moely Otak Root 106KB
+name: Build APK Moely Otak Root 106KB - FIX
 on: workflow_dispatch
 
 jobs:
@@ -20,8 +20,6 @@ jobs:
           # AMBIL LANGSUNG DARI ROOT REPO
           cp moely_asli.tflite assets/
           cp vocab.json assets/
-          
-          # Kalo ada makanan.json di root, pake. Kalo ga ada, bikin kosong
           cp makanan.json assets/ || echo "{}" > assets/makanan.json
           
           # Daftarin ke pubspec
@@ -70,7 +68,7 @@ jobs:
                   _chat.add({"bot": "Hai kak! Ini gue Moely, otak asli bikinan lo yg 106KB udah on. Gas ngobrol!"});
                 });
               } catch (e) {
-                setState(() => _status = "Error: $e");
+                setState(() => _status = "Error: Taro moely_asli.tflite di root repo");
               }
             }
 
@@ -84,7 +82,7 @@ jobs:
               for (int i = 0; i < 60; i++) {
                 var input = [inputIds];
                 var output = List.filled(1 * inputIds.length * _vocab['vocab_size'], 0.0)
-                .reshape([1, inputIds.length, _vocab['vocab_size']]);
+               .reshape([1, inputIds.length, _vocab['vocab_size']]);
                 _interpreter!.run(input, output);
                 var logits = output[0][inputIds.length - 1];
                 int nextIdx = logits.indexOf(logits.reduce(max));
@@ -103,14 +101,12 @@ jobs:
               _controller.clear();
 
               String jawaban = "";
-              // 1. Cek makanan.json dulu
               for (var key in _makanan.keys) {
                 if (tanya.toLowerCase().contains(key.toLowerCase())) {
                   jawaban = _makanan[key];
                   break;
                 }
               }
-              // 2. Kalo ga ada, pake otak asli 106KB lo
               if (jawaban.isEmpty) jawaban = _generateText("user: $tanya\nbot:");
               setState(() => _chat.add({"bot": jawaban}));
             }
