@@ -16,7 +16,7 @@ jobs:
 
       - name: Setup Project Flutter
         run: |
-          flutter create.
+          flutter create .
           flutter pub add tflite_flutter
           flutter pub get
 
