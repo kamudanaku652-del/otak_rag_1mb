@@ -22,8 +22,9 @@ jobs:
 
           mkdir -p assets
 
-          cp moely_asli.tflite assets/
-          cp vocab.json assets/
+          # Copy file yang diperlukan
+          [ -f "moely_asli.tflite" ] && cp moely_asli.tflite assets/
+          [ -f "vocab.json" ] && cp vocab.json assets/
 
           if [ -f "makanan.json" ]; then
             cp makanan.json assets/
@@ -31,16 +32,20 @@ jobs:
             echo "{}" > assets/makanan.json
           fi
 
-          # HAPUS kemungkinan assets lama biar gak double
-          sed -i '/assets:/,/^[^ ]/d' pubspec.yaml
+          # HAPUS semua isi pubspec.yaml mulai dari kata 'flutter:' sampai paling bawah
+          # Ini kunci biar gak ada "Duplicate mapping key"
+          sed -i '/^flutter:/,$d' pubspec.yaml
 
-          # Tambah assets dengan cara aman
-          echo "flutter:" >> pubspec.yaml
-          echo "  uses-material-design: true" >> pubspec.yaml
-          echo "  assets:" >> pubspec.yaml
-          echo "    - assets/moely_asli.tflite" >> pubspec.yaml
-          echo "    - assets/vocab.json" >> pubspec.yaml
-          echo "    - assets/makanan.json" >> pubspec.yaml
+          # Tulis ulang konfigurasi flutter & assets secara bersih
+          cat >> pubspec.yaml <<EOF
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/moely_asli.tflite
+    - assets/vocab.json
+    - assets/makanan.json
+EOF
 
       - name: Tulis kode Moely
         run: |
@@ -73,7 +78,7 @@ jobs:
 
             Future<void> _loadOtak() async {
               try {
-                _interpreter = await Interpreter.fromAsset('moely_asli.tflite');
+                _interpreter = await Interpreter.fromAsset('assets/moely_asli.tflite');
                 _vocab = json.decode(await rootBundle.loadString('assets/vocab.json'));
                 _makanan = json.decode(await rootBundle.loadString('assets/makanan.json'));
                 setState(() {
@@ -210,12 +215,10 @@ jobs:
 
       - name: Build APK
         run: |
-          flutter clean
-          flutter pub get
           flutter build apk --release --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Moely-APK
-          path: build/app/outputs/flutter-apk/
+          path: build/app/outputs/flutter-apk/*.apk
